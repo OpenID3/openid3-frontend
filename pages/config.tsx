@@ -4,5 +4,5 @@ export default {
     //scopes: "email",
     // Set scopes to 'openid' makes idtoken as compact as possible
     scopes: "openid",
-    redirectUri: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_REDIRECTURI + "/implicit",
+    redirectUri: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_REDIRECTURI,
 };

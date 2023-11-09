@@ -117,7 +117,7 @@ export default function Home() {
                 </section>
             </section>
 
-            <section className="hidden">
+            <section className="">
                 <section className="flex flex-row gap-6">
                     <Link href="pkce">PKCE Flow</Link>
                     <Link href="implicit">Implicit Flow</Link>

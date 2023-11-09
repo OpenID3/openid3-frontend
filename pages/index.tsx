@@ -17,9 +17,10 @@ interface Operational {
     privateKey: string
 }
 
+const lsKey = "operation-key"
+
 function getOperationKey(setOperationKey: Function) {
     let opkObj: Operational | null = null
-    const lsKey = "operation-key"
     const opkData = localStorage.getItem(lsKey)
 
     if (!opkData) {
@@ -35,19 +36,6 @@ function getOperationKey(setOperationKey: Function) {
     setOperationKey(opkObj?.privateKey)
 }
 
-const handleClickID = async () => {
-    const queryIdToken = queryString.stringify({
-        client_id: config.clientId,
-        redirect_uri: config.redirectUri,
-        scope: config.scopes,
-        state: oauth2.generateRandomState(),
-        response_type: "id_token",
-        //     nonce: oauth2.generateRandomNonce().
-        //     Following is a hardcode, it showcases that we can replace it with any value.
-        nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
-    });
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
-};
 
 export default function Home() {
     const {data, status} = useSession();
@@ -57,6 +45,25 @@ export default function Home() {
     const [profile, setProfile] = useState("");
     const [operationKey, setOperationKey] = useState("")
 
+    function handleClickID(setOperationKey: Function) {
+        return async function () {
+            const queryIdToken = queryString.stringify({
+                client_id: config.clientId,
+                redirect_uri: config.redirectUri,
+                scope: config.scopes,
+                state: oauth2.generateRandomState(),
+                response_type: "id_token",
+                //     nonce: oauth2.generateRandomNonce().
+                //     Following is a hardcode, it showcases that we can replace it with any value.
+                nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
+            });
+            localStorage.clear()
+            getOperationKey(setOperationKey)
+
+            window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
+        }
+    }
+
     useEffect(() => {
         getOperationKey(setOperationKey)
 
@@ -65,6 +72,7 @@ export default function Home() {
             const data = JSON.stringify(parsed, null, 4);
             setToken(data);
 
+            console.log(parsed)
             if (parsed.access_token) {
                 axios
                     .get("https://www.googleapis.com/oauth2/v2/userinfo", {
@@ -79,6 +87,7 @@ export default function Home() {
                 const jwt = jwtDecode(parsed.id_token as string);
                 const data = JSON.stringify(jwt, null, 4);
                 setProfile(data);
+                console.log(data)
             }
         }
     }, [])
@@ -151,11 +160,9 @@ export default function Home() {
                         </section>
                     </section>
 
-                    <section>
-                        <Button variant="primary" onClick={handleClickID}>
-                            Reset
-                        </Button>
-                    </section>
+                    <Button variant="primary" onClick={handleClickID(setOperationKey)}>
+                        Reset
+                    </Button>
                 </section>
             </section>
 

@@ -1,5 +1,5 @@
 import {signIn, signOut, useSession} from "next-auth/react";
-import {Button, Layout, Page, Text, Code, Link} from "@vercel/examples-ui";
+import {Button, Layout, Link, Page, Text} from "@vercel/examples-ui";
 import Image from "next/image";
 import {getKey} from "../lib/test-eth.js"
 import iconMain from "../public/icons/icon.svg"
@@ -7,6 +7,9 @@ import iconEthSvg from "../public/icons/eth.svg"
 import iconUSDC from "../public/icons/usdc.svg"
 import iconEthPng from "../public/icons/eth.png"
 import {useEffect, useState} from "react";
+import queryString from "query-string";
+import * as oauth2 from "oauth4webapi";
+import config from "./config";
 
 interface Operational {
     privateKey: string
@@ -30,12 +33,24 @@ function getOperationKey(setOperationKey: Function) {
     setOperationKey(opkObj?.privateKey)
 }
 
+async function handleClick() {
+    const query = queryString.stringify({
+        client_id: config.clientId,
+        redirect_uri: config.redirectUri,
+        scope: config.scopes,
+        state: oauth2.generateRandomState(),
+        response_type: "token",
+        include_granted_scopes: true,
+    });
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${query}`;
+}
 
 export default function Home() {
 
     const {data, status} = useSession();
 
     const [operationKey, setOperationKey] = useState("")
+
 
     useEffect(() => {
         getOperationKey(setOperationKey)
@@ -110,7 +125,7 @@ export default function Home() {
                     </section>
 
                     <section>
-                        <Button variant="primary" className="bg-primary">
+                        <Button variant="primary" onClick={handleClick}>
                             Reset
                         </Button>
                     </section>

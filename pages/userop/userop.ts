@@ -17,7 +17,9 @@ export type UserOperationStruct = {
     signature: BytesLike;
 };
 
-const ENTRY_POINT_ADDRESS = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+const ENTRY_POINT_ADDRESS = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+
+const DUMMY_SIGNATURE = "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c";
 
 export interface Chain {
   name: string;
@@ -67,21 +69,23 @@ export const genUserOp = async (
   paymasterAndData: string,
 ): Promise<UserOperationStruct> => {
   const accountAddr = await account.getAddress();
-    const fee = await getWeb3Provider(chain).getFeeData();
-    const userOp: UserOperationStruct = {
-      sender: accountAddr,
-      nonce: await getNonce(account, chain),
-      initCode: "0x",
-      callData,
-      callGasLimit: 500000, // hardcoded
-      verificationGasLimit: 2000000, // hardcoded
-      preVerificationGas: 0,
-      maxFeePerGas: fee.maxFeePerGas ?? 0,
-      maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0,
-      paymasterAndData: paymasterAndData ?? "0x",
-      signature: "0x",
-    };
-    return await ethers.resolveProperties(userOp);
+  const fee = await getWeb3Provider(chain).getFeeData();
+  const signature = ethers.solidityPacked(
+    ["uint8", "bytes"], [1, DUMMY_SIGNATURE]);
+  const userOp: UserOperationStruct = {
+    sender: accountAddr,
+    nonce: await getNonce(account, chain),
+    initCode: "0x",
+    callData,
+    callGasLimit: 600000, // hardcoded
+    verificationGasLimit: 2000000, // hardcoded
+    preVerificationGas: 400000, // hardcoded, tune it later
+    maxFeePerGas: fee.maxFeePerGas ?? 0,
+    maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0,
+    paymasterAndData: paymasterAndData ?? "0x",
+    signature,
+  };
+  return await ethers.resolveProperties(userOp);
 }
 
 export const genUserOpHash = async (

@@ -56,6 +56,7 @@ export default function Home() {
                 //     nonce: oauth2.generateRandomNonce().
                 //     Following is a hardcode, it showcases that we can replace it with any value.
                 nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
+                prompt: "consent",
             });
             localStorage.clear()
             getOperationKey(setOperationKey)

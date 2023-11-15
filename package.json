@@ -9,9 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@account-abstraction/utils": "^0.6.0",
     "@auth0/auth0-react": "^2.2.1",
+    "@ethersproject/providers": "^5.7.2",
+    "@openid3/contracts": "^0.0.2",
     "@vercel/examples-ui": "^1.0.5",
     "axios": "^1.6.0",
+    "ethers": "^6.8.1",
     "jwt-decode": "^4.0.0",
     "next": "^13.2.4",
     "next-auth": "^4.20.1",

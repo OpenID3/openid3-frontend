@@ -1,5 +1,6 @@
 import { AddressLike, BigNumberish, BytesLike, ethers } from "ethers";
 import { GoogleZkAdmin, OpenId3Account, OpenId3Account__factory } from "@openid3/contracts";
+import { DUMMY_SIGNATURE, ENTRY_POINT_ADDRESS } from "./constants";
 
 export type UserOperationStruct = {
     sender: AddressLike;
@@ -14,10 +15,6 @@ export type UserOperationStruct = {
     paymasterAndData: BytesLike;
     signature: BytesLike;
 };
-
-const ENTRY_POINT_ADDRESS = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
-
-const DUMMY_SIGNATURE = "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c";
 
 export interface Chain {
   name: string;

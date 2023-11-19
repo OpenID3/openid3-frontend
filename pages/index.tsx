@@ -15,6 +15,7 @@ import {jwtDecode} from "jwt-decode";
 import {buildAdminCallResetOperatorUserOp} from "./userop/zkadmin";
 import {getAuth, signInWithCredential, signInWithRedirect, GoogleAuthProvider} from "@firebase/auth";
 import {app} from "./filebase"
+import { UserCredential } from "@firebase/auth";
 
 
 interface Operational {
@@ -41,15 +42,25 @@ function handleCredentialResponse(idToken: string) {
     const credential = GoogleAuthProvider.credential(idToken);
 
     // Sign in with credential from the Google user.
-    signInWithCredential(auth, credential).catch((error) => {
-        // Handle Errors here.
+    const auth = getAuth(app);
+    console.log("45,")
+    //console.log(auth)
+    console.log(credential)
+
+    signInWithCredential(auth, credential).then(( userCredential: UserCredential) => {
+        
+        console.log(userCredential.user.accessToken);
+
+    }).catch((error : any) => {
+
         const errorCode = error.code;
+
         const errorMessage = error.message;
+
         // The email of the user's account used.
         const email = error.email;
         // The credential that was used.
         const credential = GoogleAuthProvider.credentialFromError(error);
-        // ...
     });
 }
 
@@ -63,6 +74,7 @@ function handleLogin(operator: Operational, setOperator: Function) {
         // const userOp = await buildAdminCallResetOperatorUserOp(
         //     SEPOLIA, accountAddress, newOperatorAddress,
         // );
+        console.log("68")
 
         const queryIdToken = queryString.stringify({
             client_id: config.clientId,
@@ -75,7 +87,9 @@ function handleLogin(operator: Operational, setOperator: Function) {
             nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
             prompt: "consent",
         });
-        localStorage.clear()
+        localStorage.clear()            
+        console.log("81")
+
         setOperator(getOperator())
 
         window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
@@ -91,16 +105,6 @@ export default function Home() {
     const [loginResponse, setLoginResponse] = useState({})
 
     useEffect(() => {
-        // login first
-        // firebase login WIP
-        const provider = new GoogleAuthProvider();
-        const auth = getAuth(app);
-
-        signInWithRedirect(auth, provider).then(res => {
-            console.log(res)
-        }).catch(err => {
-            throw err
-        })
 
         setOperator(getOperator)
 
@@ -108,6 +112,9 @@ export default function Home() {
         if (window.location.hash) {
             const res = queryString.parse(location.hash) || "";
             setLoginResponse(res)
+            console.log("118")
+            console.log(res)
+            handleCredentialResponse(res.id_token);
 
             if (res.access_token) {
                 axios

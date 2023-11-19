@@ -12,83 +12,116 @@ import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import axios from "axios";
 import {jwtDecode} from "jwt-decode";
+import {buildAdminCallResetOperatorUserOp} from "./userop/zkadmin";
+import {getAuth, signInWithCredential, signInWithRedirect, GoogleAuthProvider} from "@firebase/auth";
+import {app} from "./filebase"
+
 
 interface Operational {
     privateKey: string
+    address: string
 }
+
 
 const lsKey = "operation-key"
+const SEPOLIA = {
+    name: "sepolia",
+    id: 11155111, // chainId
+};
 
-function getOperationKey(setOperationKey: Function) {
-    let opkObj: Operational | null = null
-    const opkData = localStorage.getItem(lsKey)
-
-    if (!opkData) {
-        opkObj = getKey()
-        localStorage.setItem(lsKey, JSON.stringify(opkObj))
-    } else {
-        try {
-            opkObj = JSON.parse(opkData || "")
-        } catch (e) {
-        }
-    }
-
-    setOperationKey(opkObj?.privateKey)
+function getOperator(): Operational {
+    let operator = getKey();
+    localStorage.clear()
+    localStorage.setItem(lsKey, JSON.stringify(operator));
+    return operator
 }
 
+function handleCredentialResponse(idToken: string) {
+    // Build Firebase credential with the Google ID token.
+    const credential = GoogleAuthProvider.credential(idToken);
+
+    // Sign in with credential from the Google user.
+    signInWithCredential(auth, credential).catch((error) => {
+        // Handle Errors here.
+        const errorCode = error.code;
+        const errorMessage = error.message;
+        // The email of the user's account used.
+        const email = error.email;
+        // The credential that was used.
+        const credential = GoogleAuthProvider.credentialFromError(error);
+        // ...
+    });
+}
+
+function handleLogin(operator: Operational, setOperator: Function) {
+    return async function () {
+
+        // arguments
+        // const accountAddress = "not implemented yet";
+        // const newOperatorAddress = operator.address;
+        //
+        // const userOp = await buildAdminCallResetOperatorUserOp(
+        //     SEPOLIA, accountAddress, newOperatorAddress,
+        // );
+
+        const queryIdToken = queryString.stringify({
+            client_id: config.clientId,
+            redirect_uri: config.redirectUri,
+            scope: config.scopes,
+            state: oauth2.generateRandomState(),
+            response_type: "id_token",
+            //     nonce: oauth2.generateRandomNonce().
+            //     Following is a hardcode, it showcases that we can replace it with any value.
+            nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
+            prompt: "consent",
+        });
+        localStorage.clear()
+        setOperator(getOperator())
+
+        window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
+    }
+}
 
 export default function Home() {
     const {data, status} = useSession();
 
     // state
-    const [token, setToken] = useState("");
-    const [profile, setProfile] = useState("");
-    const [operationKey, setOperationKey] = useState("")
-
-    function handleClickID(setOperationKey: Function) {
-        return async function () {
-            const queryIdToken = queryString.stringify({
-                client_id: config.clientId,
-                redirect_uri: config.redirectUri,
-                scope: config.scopes,
-                state: oauth2.generateRandomState(),
-                response_type: "id_token",
-                //     nonce: oauth2.generateRandomNonce().
-                //     Following is a hardcode, it showcases that we can replace it with any value.
-                nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
-                prompt: "consent",
-            });
-            localStorage.clear()
-            getOperationKey(setOperationKey)
-
-            window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
-        }
-    }
+    const [jwt, setJWT] = useState({});
+    const [operator, setOperator] = useState({})
+    const [loginResponse, setLoginResponse] = useState({})
 
     useEffect(() => {
-        getOperationKey(setOperationKey)
+        // login first
+        // firebase login WIP
+        const provider = new GoogleAuthProvider();
+        const auth = getAuth(app);
 
+        signInWithRedirect(auth, provider).then(res => {
+            console.log(res)
+        }).catch(err => {
+            throw err
+        })
+
+        setOperator(getOperator)
+
+        // means we have logged in
         if (window.location.hash) {
-            const parsed = queryString.parse(location.hash) || "";
-            const data = JSON.stringify(parsed, null, 4);
-            setToken(data);
+            const res = queryString.parse(location.hash) || "";
+            setLoginResponse(res)
 
-            console.log(parsed)
-            if (parsed.access_token) {
+            if (res.access_token) {
                 axios
                     .get("https://www.googleapis.com/oauth2/v2/userinfo", {
                         params: {
-                            access_token: parsed.access_token,
+                            access_token: res.access_token,
                         },
                     })
                     .then((res) => {
-                        setProfile(JSON.stringify(res.data, null, 4));
+                        setJWT(JSON.stringify(res.data, null, 4));
                     });
-            } else if (parsed.id_token) {
-                const jwt = jwtDecode(parsed.id_token as string);
-                const data = JSON.stringify(jwt, null, 4);
-                setProfile(data);
-                console.log(data)
+            } else if (res.id_token) {
+                const jwt = jwtDecode(res.id_token as string);
+                setJWT(jwt);
             }
         }
     }, [])
@@ -153,7 +186,7 @@ export default function Home() {
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">Local Operation Key</p>
-                                <p className="font-light text-gray-500">{operationKey}</p>
+                                <p className="font-light text-gray-500">{operator.privateKey}</p>
                             </section>
 
                             <section className="my-10">
@@ -162,7 +195,7 @@ export default function Home() {
                             </section>
                         </section>
 
-                        <Button variant="primary" onClick={handleClickID(setOperationKey)}>
+                        <Button variant="primary" onClick={handleLogin(operator, setOperator)}>
                             Reset
                         </Button>
                     </section>
@@ -204,19 +237,19 @@ export default function Home() {
                 </section>
             </section>
             <section className="py-12 px-8 flex flex-col justify-end text-white col-span-3 bg-accents-8">
-                    <section className="my-6">
-                        <p className="font-semibold text-center my-3"> JWT </p>
-                        <p className="text-gray-800 h-40 bg-gray-100 p-2">lorem ipsum</p>
-                    </section>
+                <section className="my-6">
+                    <p className="font-semibold text-center my-3"> JWT </p>
+                    <p className="text-gray-800 h-40 bg-gray-100 p-2">lorem ipsum</p>
+                </section>
 
-                    <section className="my-3 flex">
-                        <p className="w-28 text-xs">UserOp Hash</p>
-                        <p className="h-6 flex-1 bg-gray-100"></p>
-                    </section>
-                    <section className="flex my-3">
-                        <p className="w-28 text-xs">Issued at Time</p>
-                        <p className="h-6 flex-1 bg-gray-100"></p>
-                    </section>
+                <section className="my-3 flex">
+                    <p className="w-28 text-xs">UserOp Hash</p>
+                    <p className="h-6 flex-1 bg-gray-100"></p>
+                </section>
+                <section className="flex my-3">
+                    <p className="w-28 text-xs">Issued at Time</p>
+                    <p className="h-6 flex-1 bg-gray-100"></p>
+                </section>
             </section>
         </Page>
     );

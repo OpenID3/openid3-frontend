@@ -44,13 +44,13 @@ const getNonce = async (
     chain: Chain,
 ) => {
   if (await getWeb3Provider(chain).getCode(accountAddr) === "0x") {
-    return 0;
+    return 0n;
   }
   const account = OpenId3Account__factory.connect(
     accountAddr,
     getWeb3Provider(chain)
   );
-  return await account.getNonce() as BigNumberish;
+  return await account.getNonce();
 }
 
 export const genUserOp = async (
@@ -63,16 +63,19 @@ export const genUserOp = async (
   const fee = await getWeb3Provider(chain).getFeeData();
   const signature = ethers.solidityPacked(
     ["uint8", "bytes"], [1, DUMMY_SIGNATURE]);
+  const maxFeePerGas = fee.maxFeePerGas ?? 0n;
+  const maxPriorityFeePerGas = fee.maxPriorityFeePerGas ?? 0n;
+  const nonce = await getNonce(sender, chain);
   const userOp: UserOperationStruct = {
     sender,
-    nonce: await getNonce(sender, chain),
+    nonce: "0x" + nonce.toString(16),
     initCode,
     callData,
     callGasLimit: 1000000, // hardcoded
     verificationGasLimit: 2000000, // hardcoded
     preVerificationGas: 400000, // hardcoded, tune it later
-    maxFeePerGas: fee.maxFeePerGas ?? 0n, // may need to tune this
-    maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0n,
+    maxFeePerGas: "0x" + maxFeePerGas.toString(16), // may need to tune this
+    maxPriorityFeePerGas: "0x" + maxPriorityFeePerGas.toString(16),
     paymasterAndData: paymasterAndData ?? "0x",
     signature,
   };

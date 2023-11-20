@@ -34,10 +34,10 @@ export async function isContract(
 }
 
 async function getInitCode(chain: Chain, accountHash: string) {
-  const factory = getAccountFactory({ name: "", id: 0 });
   const provider = getWeb3Provider(chain);
   const zkAdmin = getGoogleZkAdmin(provider);
   const adminData = buildZkAdminData(zkAdmin, accountHash);
+  const factory = getAccountFactory(chain);
   const deploymentCode = factory.interface.encodeFunctionData(
     "cloneWithAdminOnly",
     [adminData],

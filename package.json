@@ -15,7 +15,7 @@
     "@firebase/analytics": "^0.10.0",
     "@firebase/app": "^0.9.23",
     "@firebase/auth": "^1.4.0",
-    "@openid3/contracts": "^0.0.2",
+    "@openid3/contracts": "^0.0.4",
     "@vercel/examples-ui": "^1.0.5",
     "axios": "^1.6.0",
     "ethers": "^6.8.1",

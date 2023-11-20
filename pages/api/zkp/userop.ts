@@ -1,7 +1,6 @@
 import { AddressLike, BigNumberish, BytesLike, ethers } from "ethers";
-import { OpenId3Account } from "@openid3/contracts";
-import { StaticJsonRpcProvider } from "@ethersproject/providers";
-import { deepHexlify } from "@account-abstraction/utils";
+import { GoogleZkAdmin, OpenId3Account, OpenId3Account__factory } from "@openid3/contracts";
+import { DUMMY_SIGNATURE, ENTRY_POINT_ADDRESS } from "./constants";
 
 export type UserOperationStruct = {
     sender: AddressLike;
@@ -17,24 +16,13 @@ export type UserOperationStruct = {
     signature: BytesLike;
 };
 
-const ENTRY_POINT_ADDRESS = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
-
-const DUMMY_SIGNATURE = "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c";
-
 export interface Chain {
   name: string;
   id: number;
 };
 
-export const getPimlicoBundler = (chain: Chain) => {
-  const apiKey = process.env.PIMLICO_API_KEY;
-  return new StaticJsonRpcProvider(
-    `https://api.pimlico.io/v1/${chain.name}/rpc?apikey=${apiKey}`
-  );
-};
-
 export const getWeb3Provider = (chain: Chain) => {
-  const apiKey = process.env.VINFURA_API_KEY;
+  const apiKey = process.env.INFURA_API_KEY;
   return new ethers.InfuraProvider(Number(chain.id), apiKey);
 };
 
@@ -77,11 +65,11 @@ export const genUserOp = async (
     nonce: await getNonce(account, chain),
     initCode: "0x",
     callData,
-    callGasLimit: 600000, // hardcoded
+    callGasLimit: 200000, // hardcoded
     verificationGasLimit: 2000000, // hardcoded
     preVerificationGas: 400000, // hardcoded, tune it later
-    maxFeePerGas: fee.maxFeePerGas ?? 0,
-    maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0,
+    maxFeePerGas: fee.maxFeePerGas ?? 0n, // may need to tune this
+    maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0n,
     paymasterAndData: paymasterAndData ?? "0x",
     signature,
   };
@@ -128,28 +116,41 @@ export const genUserOpHash = async (
     );
 }
 
-export async function updateGasEstimation(
-  chain: Chain,
-  op: UserOperationStruct
-) : Promise<UserOperationStruct> {
-  const bundler = getPimlicoBundler(chain);
-  const result = await bundler.send("eth_estimateUserOperationGas", [
-     op,
-     ENTRY_POINT_ADDRESS,
-   ]);
-   const { callGasLimit, preVerificationGas, verificationGasLimit } = result;
-   op.callGasLimit = callGasLimit;
-   op.preVerificationGas = preVerificationGas;
-   op.verificationGasLimit = verificationGasLimit;
-   return op;
+export const buildZkAdminData = (
+    admin: GoogleZkAdmin,
+    accountHash: string,
+  ) => {
+    let adminData = admin.interface.encodeFunctionData(
+      "linkAccount", [accountHash]
+    );
+    return ethers.solidityPacked(
+      ["address", "bytes"], [admin.target, adminData])
 }
 
-export async function submitUserOp(chain: Chain, op: UserOperationStruct) {
-  const bundler = getPimlicoBundler(chain);
-  const hexifiedUserOp = deepHexlify(await ethers.resolveProperties(op));
-  const uoHash = await bundler.send("eth_sendUserOperation", [
-      hexifiedUserOp,
-      ENTRY_POINT_ADDRESS
-  ]);
-  return uoHash;
+export async function buildAdminCallUserOp(
+    chain: Chain,
+    sender: OpenId3Account,
+    callData: string,
+    paymasterAndData?: string,
+) {
+    let userOp = await genUserOp(
+        chain, sender, callData, paymasterAndData ?? "0x");
+    const userOpHash = await genUserOpHash(chain, userOp);
+    userOp.signature = ethers.solidityPacked(
+        ["uint8", "bytes"], [1, userOp.signature]);
+    return {userOp, userOpHash};
+}
+
+export async function buildAdminCallResetOperatorUserOp(
+    chain: Chain,
+    sender: string,
+    newOperator: string,
+    paymasterAndData?: string,
+) {
+    const account = OpenId3Account__factory.connect(
+        sender, getWeb3Provider(chain));
+    const callData = account.interface.encodeFunctionData(
+        "setOperator", [newOperator]);
+    return await buildAdminCallUserOp(
+        chain, account, callData, paymasterAndData ?? "0x");
 }

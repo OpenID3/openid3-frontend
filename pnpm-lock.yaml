@@ -24,8 +24,8 @@ dependencies:
     specifier: ^1.4.0
     version: 1.4.0(@firebase/app@0.9.23)
   '@openid3/contracts':
-    specifier: ^0.0.2
-    version: 0.0.2
+    specifier: ^0.0.4
+    version: 0.0.4
   '@vercel/examples-ui':
     specifier: ^1.0.5
     version: 1.0.5(next@13.2.4)(react-dom@18.2.0)(react@18.2.0)
@@ -766,8 +766,8 @@ packages:
       fastq: 1.15.0
     dev: true
 
-  /@openid3/contracts@0.0.2:
-    resolution: {integrity: sha512-6QdX+m6q6sCu5ev2qRjqtYZ4BxQiBJWs51efo+z135vaZ2SHmohYyww75Y0pB9U/CLEtyvb0WbGyq8gqQGkq9Q==}
+  /@openid3/contracts@0.0.4:
+    resolution: {integrity: sha512-ST0JWKJliqoVedh25U5DK6I/jxJKw3v2q9Ru+6Ox2rbZ9OxQVgnN43rD3XknGFjmUNlb0F4ADN29vz9DlJoPSA==}
     dev: false
 
   /@openzeppelin/contracts@4.9.3:

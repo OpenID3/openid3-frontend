@@ -12,7 +12,7 @@ import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import axios from "axios";
 import {jwtDecode} from "jwt-decode";
-import {buildAdminCallResetOperatorUserOp} from "./userop/zkadmin";
+import {buildAdminCallResetOperatorUserOp} from "./api/zkp/userop";
 import {getAuth, signInWithCredential, signInWithRedirect, GoogleAuthProvider} from "@firebase/auth";
 import {app} from "./filebase"
 import {UserCredential} from "@firebase/auth";
@@ -137,9 +137,9 @@ export default function Home() {
                     // arguments
                     const accountAddress = "";
                     const newOperatorAddress = operator.address;
-                    const userOp = await buildAdminCallResetOperatorUserOp(
-                        SEPOLIA, accountAddress, newOperatorAddress,
-                    );
+                    // const userOp = await buildAdminCallResetOperatorUserOp(
+                    //     SEPOLIA, accountAddress, newOperatorAddress,
+                    // );
 
                     // const fbRes = await callFirebaseFunction(
                     //     "requestToReset",

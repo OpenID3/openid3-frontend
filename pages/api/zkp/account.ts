@@ -56,15 +56,6 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
   const salt = ethers.keccak256(adminData);
   const accountAddr = await factory.predictClonedAddress(salt);
   if (await isContract(provider, accountAddr)) {
-    return {
-        address: accountAddr,
-        deployed: false,
-        admin: zkAdmin,
-        operator: ethers.ZeroAddress,
-        initCode: await getInitCode(chain, accountHash),
-        accountHash
-    };
-  } else {
     const account = OpenId3Account__factory.connect(
         accountAddr, provider);
     const [admin, operator] = await Promise.all([
@@ -82,5 +73,14 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
         initCode: "0x",
         accountHash,
     };
+  } else {
+    return {
+      address: accountAddr,
+      deployed: false,
+      admin: zkAdmin,
+      operator: ethers.ZeroAddress,
+      initCode: await getInitCode(chain, accountHash),
+      accountHash
+  };
   }
 }

@@ -35,16 +35,18 @@ function getOperator(): Operational {
     return operator
 }
 
-async function handleCredentialResponse(idToken: string): string {
+async function handleCredentialResponse(idToken: string): UserCredential {
     // Build Firebase credential with the Google ID token.
     const credential = GoogleAuthProvider.credential(idToken);
 
     // Sign in with credential from the Google user.
     const auth = getAuth(app);
+    console.log(2293924824, idToken)
 
     try {
         const res: UserCredential = await signInWithCredential(auth, credential)
-        return res.user.accessToken
+        console.log(2293924824, res.user.accessToken)
+        return res;
     } catch (err: any) {
         const errorCode = err.code;
         const errorMessage = err.message;
@@ -52,44 +54,24 @@ async function handleCredentialResponse(idToken: string): string {
         const email = err.email;
         // The credential that was used.
         const credential = GoogleAuthProvider.credentialFromError(err);
+        console.log(errorCode, errorMessage, email, credential)
     }
-    //     .then((userCredential: UserCredential) => {
-    //     const at = userCredential.user.accessToken
-    //     setAccessToken(at)
-    //
-    //
-    //     // TODO: move this block to the outside
-    //     // then use above data to initiate a firebase login
 
-    //         .then(res => {
-    //
-    //         })
-    //         .catch(err => {
-    //
-    //         })
-    //
-    // }).catch((error: any) => {
-    //
-    // });
 }
 
 function handleLogin(operator: Operational, setOperator: Function, userOpHash: string | undefined) {
     return async function () {
-        const nonce = userOpHash ? userOpHash : crypto.randomUUID();
+        const nonce = userOpHash ? userOpHash.slice(2) : crypto.randomUUID();
         const queryIdToken = queryString.stringify({
             client_id: config.clientId,
             redirect_uri: config.redirectUri,
             scope: config.scopes,
             state: oauth2.generateRandomState(),
             response_type: "id_token",
-            //     nonce: oauth2.generateRandomNonce().
-            //     Following is a hardcode, it showcases that we can replace it with any value.
             nonce,
             prompt: "consent",
         });
         localStorage.clear()
-
-        setOperator(getOperator())
 
         window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
     }
@@ -100,7 +82,7 @@ export default function Home() {
 
     // session state
     const [jwt, setJWT] = useState({});
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [accountInfo, setAccountInfo] = useState({});
 
     const [operator, setOperator] = useState({})
@@ -113,13 +95,17 @@ export default function Home() {
         // use this self-invoking function to embrace async-await
         (async () => {
             let temp = {}
-            setOperator(getOperator)
+            const operator = getOperator()
+            setOperator(operator);
+
+            console.log(11111111, operator);
             
             // means we have logged in
             if (window.location.hash) {
                 const parsed = queryString.parse(location.hash) || "";
                 const idToken = parsed.id_token
                 const fbAccessToken = await handleCredentialResponse(idToken)
+                console.log(9989000, fbAccessToken);
 
                 setLoginResponse(parsed)
 
@@ -140,7 +126,7 @@ export default function Home() {
                 // start firebase login
                 try {
 
-                    setLoading(true)
+                    setLoading(false)
 
                     // arguments
                     const accountHash = keccak256(toUtf8Bytes(temp.sub))
@@ -149,8 +135,9 @@ export default function Home() {
                     const accountAddress = accountInfo.address;
                     setAccountInfo(accountInfo);
                     const newOperatorAddress = operator.address;
+                    console.log(958292323, newOperatorAddress);
                     const {userOp, userOpHash} = await buildAdminCallResetOperatorUserOp(
-                        SEPOLIA, accountAddress, newOperatorAddress,
+                        SEPOLIA, accountAddress, accountInfo.initCode, newOperatorAddress
                     );
 
                     setUserOp({userOp, userOpHash});
@@ -239,7 +226,7 @@ export default function Home() {
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">UserID (Your Google account hash)</p>
-                                <p className="font-light text-gray-500"> </p>
+                                <p className="font-light text-gray-500">{accountInfo.accountHash}</p>
                             </section>
                         </section>
 

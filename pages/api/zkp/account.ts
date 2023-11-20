@@ -38,7 +38,7 @@ export async function isContract(
 }
 
 async function getInitCode(chain: Chain, accountHash: string) {
-  const factory = getAccountFactory({ name: "", id: 0 });
+  const factory = getAccountFactory(chain);
   const provider = getWeb3Provider(chain);
   const zkAdmin = getGoogleZkAdmin(provider);
   const adminData = buildZkAdminData(zkAdmin, accountHash);
@@ -48,7 +48,7 @@ async function getInitCode(chain: Chain, accountHash: string) {
   );
   return ethers.solidityPacked(
     ["address", "bytes"],
-    [process.env.ACCOUNT_FACTORY_CONTRACT_V1!, deploymentCode]
+    ['0xa5727531591A3dE7ADaC6b3759bEF5BD5549c121', deploymentCode]
   );
 }
 

@@ -22,7 +22,7 @@ export interface Chain {
 };
 
 export const getWeb3Provider = (chain: Chain) => {
-  const apiKey = process.env.INFURA_API_KEY;
+  const apiKey = process.env.NEXT_PUBLIC_INFURA_API_KEY;
   return new ethers.InfuraProvider(Number(chain.id), apiKey);
 };
 
@@ -38,45 +38,47 @@ export const buildAccountExecData = async (
       data ?? "0x"
     ]);
 }
-
 const getNonce = async (
-    accountAddr: string,
-    chain: Chain,
+  accountAddr: string,
+  chain: Chain,
 ) => {
-  if (await getWeb3Provider(chain).getCode(accountAddr) === "0x") {
-    return 0;
-  }
-  const account = OpenId3Account__factory.connect(
-    accountAddr,
-    getWeb3Provider(chain)
-  );
-  return await account.getNonce() as BigNumberish;
+if (await getWeb3Provider(chain).getCode(accountAddr) === "0x") {
+  return 0n;
+}
+const account = OpenId3Account__factory.connect(
+  accountAddr,
+  getWeb3Provider(chain)
+);
+return await account.getNonce();
 }
 
 export const genUserOp = async (
-  chain: Chain,
-  sender: string,
-  initCode: string,
-  callData: string,
-  paymasterAndData: string,
+chain: Chain,
+sender: string,
+initCode: string,
+callData: string,
+paymasterAndData: string,
 ): Promise<UserOperationStruct> => {
-  const fee = await getWeb3Provider(chain).getFeeData();
-  const signature = ethers.solidityPacked(
-    ["uint8", "bytes"], [1, DUMMY_SIGNATURE]);
-  const userOp: UserOperationStruct = {
-    sender,
-    nonce: await getNonce(sender, chain),
-    initCode,
-    callData,
-    callGasLimit: 1000000, // hardcoded
-    verificationGasLimit: 2000000, // hardcoded
-    preVerificationGas: 400000, // hardcoded, tune it later
-    maxFeePerGas: fee.maxFeePerGas ?? 0n, // may need to tune this
-    maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0n,
-    paymasterAndData: paymasterAndData ?? "0x",
-    signature,
-  };
-  return await ethers.resolveProperties(userOp);
+const fee = await getWeb3Provider(chain).getFeeData();
+const signature = ethers.solidityPacked(
+  ["uint8", "bytes"], [1, DUMMY_SIGNATURE]);
+const maxFeePerGas = fee.maxFeePerGas ?? 0n;
+const maxPriorityFeePerGas = fee.maxPriorityFeePerGas ?? 0n;
+const nonce = await getNonce(sender, chain);
+const userOp: UserOperationStruct = {
+  sender,
+  nonce: "0x" + nonce.toString(16),
+  initCode,
+  callData,
+  callGasLimit: 1000000, // hardcoded
+  verificationGasLimit: 2000000, // hardcoded
+  preVerificationGas: 400000, // hardcoded, tune it later
+  maxFeePerGas: "0x" + maxFeePerGas.toString(16), // may need to tune this
+  maxPriorityFeePerGas: "0x" + maxPriorityFeePerGas.toString(16),
+  paymasterAndData: paymasterAndData ?? "0x",
+  signature,
+};
+return await ethers.resolveProperties(userOp);
 }
 
 export const genUserOpHash = async (

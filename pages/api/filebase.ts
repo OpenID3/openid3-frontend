@@ -7,9 +7,9 @@ const callFirebaseFunction = async (
             ?: string
     ) => {
 
-        let urlPrefix = "https://us-central1-openid3-bbd1b.cloudfunctions.net/" + func;
+        let url = "https://us-central1-openid3-bbd1b.cloudfunctions.net/" + func;
         const config = token ? {headers: {authorization: "Bearer " + token}} : {};
-        return axios.post(`${urlPrefix}${func}`, data, config);
+        return axios.post(url, data, config);
     }
 ;
 

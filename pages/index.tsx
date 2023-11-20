@@ -23,11 +23,6 @@ import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
 import * as web3 from 'web3';
 
-interface Operational {
-    privateKey: string
-    address: string
-}
-
 const lsKey = "operation-key"
 
 function getOperator(): web3.eth.accounts.Web3Account {

@@ -1,25 +1,27 @@
-import {signIn, signOut, useSession} from "next-auth/react";
-import {Button, Layout, Link, Page, Text} from "@vercel/examples-ui";
+import { signIn, signOut, useSession } from "next-auth/react";
+import { Button, Layout, Link, Page, Text } from "@vercel/examples-ui";
 import Image from "next/image";
-import {getKey} from "../lib/test-eth.js"
+import { getKey } from "../lib/test-eth.js"
 import iconMain from "../public/icons/icon.svg"
 import iconEthSvg from "../public/icons/eth.svg"
 import iconUSDC from "../public/icons/usdc.svg"
 import iconEthPng from "../public/icons/eth.png"
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 import queryString from "query-string";
 import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import axios from "axios";
-import {jwtDecode} from "jwt-decode";
-import {buildAdminCallResetOperatorUserOp, genUserOpHash, getWeb3Provider} from "./api/zkp/userop";
-import {getAuth, signInWithCredential, signInWithRedirect, GoogleAuthProvider} from "@firebase/auth";
-import {app} from "./filebase"
-import {UserCredential} from "@firebase/auth";
-import {callFirebaseFunction} from "./api/filebase";
-import {getAccountInfo} from "./api/zkp/account";
-import {SEPOLIA} from "./api/zkp/constants";
-import {sha256, keccak256, toUtf8Bytes} from "ethers";
+import { jwtDecode } from "jwt-decode";
+import { buildAdminCallResetOperatorUserOp } from "./api/zkp/userop";
+import { getAuth, signInWithCredential, GoogleAuthProvider } from "@firebase/auth";
+import { app } from "./filebase"
+import { UserCredential } from "@firebase/auth";
+import { callFirebaseFunction } from "./api/filebase";
+import { getAccountInfo } from "./api/zkp/account";
+import { SEPOLIA } from "./api/zkp/constants";
+import { keccak256, toUtf8Bytes } from "ethers";
+import { useRequest } from 'ahooks'
+import { BounceLoader } from 'react-spinners'
 
 interface Operational {
     privateKey: string
@@ -30,12 +32,12 @@ const lsKey = "operation-key"
 
 function getOperator(): Operational {
     let operator = getKey();
-    localStorage.clear()
-    localStorage.setItem(lsKey, JSON.stringify(operator.address));
+    localStorage.removeItem(lsKey)
+    localStorage.setItem(lsKey, JSON.stringify(operator));
     return operator
 }
 
-async function handleCredentialResponse(idToken: string): UserCredential {
+async function handleCredentialResponse(idToken: string): Promise<string> {
     // Build Firebase credential with the Google ID token.
     const credential = GoogleAuthProvider.credential(idToken);
 
@@ -45,8 +47,7 @@ async function handleCredentialResponse(idToken: string): UserCredential {
 
     try {
         const res: UserCredential = await signInWithCredential(auth, credential)
-        console.log(2293924824, res.user.accessToken)
-        return res;
+        return res.user.getIdToken();
     } catch (err: any) {
         const errorCode = err.code;
         const errorMessage = err.message;
@@ -55,8 +56,8 @@ async function handleCredentialResponse(idToken: string): UserCredential {
         // The credential that was used.
         const credential = GoogleAuthProvider.credentialFromError(err);
         console.log(errorCode, errorMessage, email, credential)
+        throw new Error(errorMessage);
     }
-
 }
 
 function handleLogin(operator: Operational, setOperator: Function, userOpHash: string | undefined) {
@@ -71,20 +72,20 @@ function handleLogin(operator: Operational, setOperator: Function, userOpHash: s
             nonce,
             prompt: "consent",
         });
-        localStorage.clear()
+        localStorage.removeItem(lsKey)
 
         window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
     }
 }
 
 export default function Home() {
-    const {data, status} = useSession();
+    const { data, status } = useSession();
 
     // session state
     const [jwt, setJWT] = useState({});
     const [loading, setLoading] = useState(false);
     const [accountInfo, setAccountInfo] = useState({});
-
+    const [isCalculating, setIsCalculating] = useState(false);
     const [operator, setOperator] = useState({})
     const [userOp, setUserOp] = useState({})
 
@@ -125,10 +126,6 @@ export default function Home() {
 
                 // start firebase login
                 try {
-
-                    setLoading(false)
-
-                    // arguments
                     const accountHash = keccak256(toUtf8Bytes(temp.sub))
                     // TODO: currently broken, to be fixed
                     const accountInfo = await getAccountInfo(SEPOLIA, accountHash);
@@ -153,20 +150,61 @@ export default function Home() {
                         },
                         fbAccessToken,
                     )
+                    setIsCalculating(true)
+                    localStorage.setItem('isCalculate', 'true')
                     console.log(1234567, fbRes)
                 } catch (e) {
                     throw e
+                } finally {
+                    setIsCalculating(false)
+                    localStorage.setItem('isCalculate', 'false')
                 }
             }
         })()
     }, [])
+    useEffect(() => {
+        const _isCalculating = localStorage.getItem('isCalculating')
+        if (_isCalculating === 'true') {
+            setIsCalculating(true)
+        }
+    }, [])
+    async function callFunction2() {
+        console.log('calling')
+        // mock call
+        if (Date.now() > 1700594759838) {
+            // if success cancel polling
+            setIsCalculating(false)
+            localStorage.removeItem('isCalculating')
+        } else {
+            console.log("polling")
+            throw new Error('polling')
+            // call function2
+        }
+    }
+    function stopLoading() {
+        setIsCalculating(false)
+        localStorage.removeItem('isCalculating')
+    }
+    function startLoading() {
+        setIsCalculating(true)
+        localStorage.setItem('isCalculating', 'true')
+    }
+    
+    useRequest(callFunction2, {
+        pollingInterval: 2000,
+        ready: isCalculating ,
+    });
+    function handleClick() {
+        startLoading()
+    }
+
 
     return (
         <Page className="grid grid-cols-12 lg:max-w-screen-xl">
             <section className="col-span-9 lg:mx-20">
                 <section className="flex justify-between">
                     <section className="flex gap-3 items-center">
-                        <Image src={iconMain} alt="home icon"/>
+                        <Image src={iconMain} alt="home icon" />
                         <p className="text-xl font-semibold"> Openid3 </p>
                     </section>
                     <button className="font-semibold text-gray-400">
@@ -178,16 +216,16 @@ export default function Home() {
                     <section className="flex justify-between">
                         <p className="text-2xl font-semibold">Tokens</p>
                         <section className="flex items-center gap-1.5">
-                            <Image width={25} src={iconEthPng} alt="Ethereum Goerli"/>
+                            <Image width={25} src={iconEthPng} alt="Ethereum Goerli" />
                             <p className="text-lg">Ethereum Goerli</p>
                         </section>
                     </section>
 
-                    <hr className="border-t border-accents-2 my-4"/>
+                    <hr className="border-t border-accents-2 my-4" />
 
                     <section className="flex items-center justify-between my-6">
                         <section className="flex items-center gap-3">
-                            <Image width={35} src={iconEthSvg} alt="Ethereum"/>
+                            <Image width={35} src={iconEthSvg} alt="Ethereum" />
                             <p> ETH </p>
                         </section>
                         <section className="flex flex-col items-end">
@@ -198,7 +236,7 @@ export default function Home() {
 
                     <section className="flex items-center justify-between my-6">
                         <section className="flex items-center gap-3">
-                            <Image width={35} src={iconUSDC} alt="home icon"/>
+                            <Image width={35} src={iconUSDC} alt="home icon" />
                             <p> USDC </p>
                         </section>
                         <section className="flex flex-col items-end">
@@ -210,7 +248,7 @@ export default function Home() {
 
                 <section className="my-10">
                     <p className="text-2xl font-semibold">AA Acount</p>
-                    <hr className="border-t border-accents-2 my-4"/>
+                    <hr className="border-t border-accents-2 my-4" />
 
                     <section className="flex items-center justify-between">
                         <section>
@@ -230,9 +268,14 @@ export default function Home() {
                             </section>
                         </section>
 
-                        <Button disabled={loading} variant="primary" onClick={handleLogin(operator, setOperator, userOp.userOpHash)}>
-                            {!loading ? 'Reset' : 'ZKP Calculating'}
+                        <Button disabled={isCalculating} variant="primary" onClick={handleClick}>
+                            {!isCalculating ? <span>Reset</span> : <div className="flex justify-center items-center">ZKP Calculating &nbsp;<BounceLoader size={12} color="#fff" /></div>}
                         </Button>
+                        {
+                            isCalculating &&  <Button  className="" variant="secondary" onClick={stopLoading}>
+                                Stop
+                        </Button>
+                        }
                     </section>
                 </section>
 
@@ -242,7 +285,7 @@ export default function Home() {
                         <Link href="implicit">Implicit Flow</Link>
                     </section>
 
-                    <hr className="border-t border-accents-2 my-6"/>
+                    <hr className="border-t border-accents-2 my-6" />
 
                     <section className="flex flex-col gap-3">
                         {status === "authenticated" ? (

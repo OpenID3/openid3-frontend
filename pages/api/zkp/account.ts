@@ -33,6 +33,21 @@ export async function isContract(
    return false;
 }
 
+async function getInitCode(chain: Chain, accountHash: string) {
+  const factory = getAccountFactory({ name: "", id: 0 });
+  const provider = getWeb3Provider(chain);
+  const zkAdmin = getGoogleZkAdmin(provider);
+  const adminData = buildZkAdminData(zkAdmin, accountHash);
+  const deploymentCode = factory.interface.encodeFunctionData(
+    "cloneWithAdminOnly",
+    [adminData],
+  );
+  return ethers.solidityPacked(
+    ["address", "bytes"],
+    [process.env.ACCOUNT_FACTORY_CONTRACT_V1!, deploymentCode]
+  );
+}
+
 export async function getAccountInfo(chain: Chain, accountHash: string) {
   const provider = getWeb3Provider(chain);
   const zkAdmin = getGoogleZkAdmin(provider);
@@ -46,6 +61,7 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
         deployed: false,
         admin: zkAdmin,
         operator: ethers.ZeroAddress,
+        initCode: await getInitCode(chain, accountHash),
     };
   } else {
     const account = OpenId3Account__factory.connect(
@@ -62,6 +78,7 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
         deployed: true,
         admin: zkAdmin,
         operator,
+        initCode: "0x",
     };
   }
 }

@@ -12,11 +12,14 @@ import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import axios from "axios";
 import {jwtDecode} from "jwt-decode";
-import {buildAdminCallResetOperatorUserOp} from "./api/zkp/userop";
+import {buildAdminCallResetOperatorUserOp, getWeb3Provider} from "./api/zkp/userop";
 import {getAuth, signInWithCredential, signInWithRedirect, GoogleAuthProvider} from "@firebase/auth";
 import {app} from "./filebase"
 import {UserCredential} from "@firebase/auth";
 import {callFirebaseFunction} from "./api/filebase";
+import {getAccountInfo} from "./api/zkp/account";
+import {SEPOLIA} from "./api/zkp/constants";
+import {sha256, keccak256, toUtf8Bytes} from "ethers";
 
 interface Operational {
     privateKey: string
@@ -24,10 +27,6 @@ interface Operational {
 }
 
 const lsKey = "operation-key"
-const SEPOLIA = {
-    name: "sepolia",
-    id: 11155111, // chainId
-};
 
 function getOperator(): Operational {
     let operator = getKey();
@@ -108,6 +107,7 @@ export default function Home() {
     useEffect(() => {
         // use this self-invoking function to embrace async-await
         (async () => {
+            let temp = {}
             setOperator(getOperator)
 
             // means we have logged in
@@ -119,23 +119,25 @@ export default function Home() {
                 setLoginResponse(parsed)
 
                 if (parsed.access_token) {
-                    axios
+                    const res = await axios
                         .get("https://www.googleapis.com/oauth2/v2/userinfo", {
                             params: {
                                 access_token: parsed.access_token,
                             },
                         })
-                        .then((res) => {
-                            setJWT(JSON.stringify(res.data, null, 4));
-                        });
+                    setJWT(JSON.stringify(res.data, null, 4));
                 } else if (parsed.id_token) {
-                    const jwt = jwtDecode(parsed.id_token as string);
-                    setJWT(jwt);
+                    const decoded = jwtDecode(parsed.id_token as string);
+                    temp = decoded
+                    setJWT(decoded);
                 }
 
+                // start firebase login
                 try {
                     // arguments
-                    const accountAddress = "";
+                    const s = keccak256(toUtf8Bytes(temp.sub))
+                    // TODO: currently broken, to be fixed
+                    const accountAddress = await getAccountInfo(SEPOLIA, s);
                     const newOperatorAddress = operator.address;
                     // const userOp = await buildAdminCallResetOperatorUserOp(
                     //     SEPOLIA, accountAddress, newOperatorAddress,

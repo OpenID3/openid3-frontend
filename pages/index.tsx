@@ -100,6 +100,8 @@ export default function Home() {
 
     // session state
     const [jwt, setJWT] = useState({});
+    const [loading, setLoading] = useState(true);
+
     const [operator, setOperator] = useState({})
     const [loginResponse, setLoginResponse] = useState({})
 
@@ -134,27 +136,31 @@ export default function Home() {
 
                 // start firebase login
                 try {
-                    // arguments
-                    const s = keccak256(toUtf8Bytes(temp.sub))
-                    // TODO: currently broken, to be fixed
-                    const accountAddress = await getAccountInfo(SEPOLIA, s);
-                    const newOperatorAddress = operator.address;
-                    // const userOp = await buildAdminCallResetOperatorUserOp(
-                    //     SEPOLIA, accountAddress, newOperatorAddress,
-                    // );
 
-                    // const fbRes = await callFirebaseFunction(
-                    //     "requestToReset",
-                    //     {
-                    //         provider: "google",
-                    //         id_token: idToken,
-                    //         chain: SEPOLIA,
-                    //         dev: true,
-                    //         userOp,
-                    //     },
-                    //     fbAccessToken,
-                    // )
-                    // console.log(fbRes)
+                    setLoading(true)
+
+                    // arguments
+                    const address = keccak256(toUtf8Bytes(temp.sub))
+                    // TODO: currently broken, to be fixed
+                    const accountInfo = await getAccountInfo(SEPOLIA, address);
+                    const accountAddress = accountInfo.address;
+                    const newOperatorAddress = operator.address;
+                    const userOp = await buildAdminCallResetOperatorUserOp(
+                        SEPOLIA, accountAddress, newOperatorAddress,
+                    );
+
+                    const fbRes = await callFirebaseFunction(
+                        "requestToReset",
+                        {
+                            provider: "google",
+                            id_token: idToken,
+                            chain: SEPOLIA,
+                            dev: true,
+                            userOp,
+                        },
+                        fbAccessToken,
+                    )
+                    console.log(1234567, fbRes)
                 } catch (e) {
                     throw e
                 }
@@ -231,8 +237,8 @@ export default function Home() {
                             </section>
                         </section>
 
-                        <Button variant="primary" onClick={handleLogin(operator, setOperator)}>
-                            Reset
+                        <Button disabled={loading} variant="primary" onClick={handleLogin(operator, setOperator)}>
+                            {!loading ? 'Reset' : 'ZKP Calculating'}
                         </Button>
                     </section>
                 </section>

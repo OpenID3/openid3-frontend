@@ -10,18 +10,18 @@ import { useEffect, useState } from "react";
 import queryString from "query-string";
 import * as oauth2 from "oauth4webapi";
 import config from "./config";
-import axios from "axios";
 import { jwtDecode } from "jwt-decode";
-import { buildAdminCallResetOperatorUserOp } from "./api/zkp/userop";
+import { UserOperationStruct, buildAdminCallResetOperatorUserOp } from "./api/zkp/userop";
 import { getAuth, signInWithCredential, GoogleAuthProvider } from "@firebase/auth";
 import { app } from "./filebase"
 import { UserCredential } from "@firebase/auth";
 import { callFirebaseFunction } from "./api/filebase";
 import { getAccountInfo } from "./api/zkp/account";
 import { SEPOLIA } from "./api/zkp/constants";
-import { keccak256, toUtf8Bytes } from "ethers";
+import { ethers, keccak256, toUtf8Bytes } from "ethers";
 import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
+import * as web3 from 'web3';
 
 interface Operational {
     privateKey: string
@@ -30,7 +30,7 @@ interface Operational {
 
 const lsKey = "operation-key"
 
-function getOperator(): Operational {
+function getOperator(): web3.eth.accounts.Web3Account {
     let operator = getKey();
     localStorage.removeItem(lsKey)
     localStorage.setItem(lsKey, JSON.stringify(operator));
@@ -38,43 +38,14 @@ function getOperator(): Operational {
 }
 
 async function handleCredentialResponse(idToken: string): Promise<string> {
-    // Build Firebase credential with the Google ID token.
     const credential = GoogleAuthProvider.credential(idToken);
-
-    // Sign in with credential from the Google user.
     const auth = getAuth(app);
-    console.log(2293924824, idToken)
-
     try {
         const res: UserCredential = await signInWithCredential(auth, credential)
         return res.user.getIdToken();
     } catch (err: any) {
-        const errorCode = err.code;
-        const errorMessage = err.message;
-        // The email of the user's account used.
-        const email = err.email;
-        // The credential that was used.
-        const credential = GoogleAuthProvider.credentialFromError(err);
-        console.log(errorCode, errorMessage, email, credential)
-        throw new Error(errorMessage);
-    }
-}
-
-function handleLogin(operator: Operational, setOperator: Function, userOpHash: string | undefined) {
-    return async function () {
-        const nonce = userOpHash ? userOpHash.slice(2) : crypto.randomUUID();
-        const queryIdToken = queryString.stringify({
-            client_id: config.clientId,
-            redirect_uri: config.redirectUri,
-            scope: config.scopes,
-            state: oauth2.generateRandomState(),
-            response_type: "id_token",
-            nonce,
-            prompt: "consent",
-        });
-        localStorage.removeItem(lsKey)
-
-        window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
+        console.log(err);
+        throw new Error("failed to get id token of user");
     }
 }
 
@@ -82,68 +53,71 @@ export default function Home() {
     const { data, status } = useSession();
 
     // session state
-    const [jwt, setJWT] = useState({});
-    const [loading, setLoading] = useState(false);
-    const [accountInfo, setAccountInfo] = useState({});
+    const [jwt, setJWT] = useState<{sub: string}>({sub: ""});
     const [isCalculating, setIsCalculating] = useState(false);
-    const [operator, setOperator] = useState({})
-    const [userOp, setUserOp] = useState({})
 
-    const [loginResponse, setLoginResponse] = useState({})
+    const [accountInfo, setAccountInfo] = useState<{
+        address: string,
+        deployed: boolean,
+        initCode: string,
+        operator: string,
+        accountHash: string,
+    }>({
+        address: ethers.ZeroAddress,
+        deployed: false,
+        initCode: "0x",
+        accountHash: "0x",
+        operator: ethers.ZeroAddress,
+    });
+    const [userOp, setUserOp] = useState<{
+        userOp?: UserOperationStruct,
+        userOpHash?: string
+    }>({})
+    const [operator, setOperator] = useState<web3.eth.accounts.Web3Account | null>(null);
+    const [_loginResponse, setLoginResponse] = useState({})
+
+    async function handleLogin() {
+        setOperator(getOperator());
+        const queryIdToken = queryString.stringify({
+            client_id: config.clientId,
+            redirect_uri: config.redirectUri,
+            scope: config.scopes,
+            state: oauth2.generateRandomState(),
+            response_type: "id_token",
+            nonce: userOp.userOpHash!.slice(2),
+            prompt: "consent",
+        });
+        localStorage.removeItem(lsKey)
+        window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
+    }
 
     // when page is loaded
     useEffect(() => {
         // use this self-invoking function to embrace async-await
         (async () => {
-            let temp = {}
-            const operator = getOperator()
-            setOperator(operator);
-
-            console.log(11111111, operator);
-            
-            // means we have logged in
+            setOperator(getOperator)
             if (window.location.hash) {
                 const parsed = queryString.parse(location.hash) || "";
-                const idToken = parsed.id_token
-                const fbAccessToken = await handleCredentialResponse(idToken)
-                console.log(9989000, fbAccessToken);
-
+                const fbAccessToken = await handleCredentialResponse(parsed.id_token as string)
                 setLoginResponse(parsed)
-
-                if (parsed.access_token) {
-                    const res = await axios
-                        .get("https://www.googleapis.com/oauth2/v2/userinfo", {
-                            params: {
-                                access_token: parsed.access_token,
-                            },
-                        })
-                    setJWT(JSON.stringify(res.data, null, 4));
-                } else if (parsed.id_token) {
-                    const decoded = jwtDecode(parsed.id_token as string);
-                    temp = decoded
-                    setJWT(decoded);
-                }
-
-                // start firebase login
+                setJWT(jwtDecode(parsed.id_token as string));
                 try {
-                    const accountHash = keccak256(toUtf8Bytes(temp.sub))
-                    // TODO: currently broken, to be fixed
-                    const accountInfo = await getAccountInfo(SEPOLIA, accountHash);
-                    const accountAddress = accountInfo.address;
+                    const address = keccak256(toUtf8Bytes(jwt.sub))
+                    const accountInfo = await getAccountInfo(SEPOLIA, address);
                     setAccountInfo(accountInfo);
-                    const newOperatorAddress = operator.address;
-                    console.log(958292323, newOperatorAddress);
-                    const {userOp, userOpHash} = await buildAdminCallResetOperatorUserOp(
-                        SEPOLIA, accountAddress, accountInfo.initCode, newOperatorAddress
+                    const newOperatorAddress = operator!.address;
+                    const userOp = await buildAdminCallResetOperatorUserOp(
+                        SEPOLIA,
+                        accountInfo.address,
+                        accountInfo.initCode,
+                        newOperatorAddress,
                     );
-
-                    setUserOp({userOp, userOpHash});
-
+                    setUserOp(userOp);
                     const fbRes = await callFirebaseFunction(
                         "requestToReset",
                         {
                             provider: "google",
-                            id_token: idToken,
+                            id_token: parsed.id_token,
                             chain: SEPOLIA,
                             dev: true,
                             userOp,
@@ -161,13 +135,15 @@ export default function Home() {
                 }
             }
         })()
-    }, [])
+    }, [jwt.sub, operator])
+
     useEffect(() => {
         const _isCalculating = localStorage.getItem('isCalculating')
         if (_isCalculating === 'true') {
             setIsCalculating(true)
         }
-    }, [])
+    }, []);
+
     async function callFunction2() {
         console.log('calling')
         // mock call
@@ -181,10 +157,12 @@ export default function Home() {
             // call function2
         }
     }
+
     function stopLoading() {
         setIsCalculating(false)
         localStorage.removeItem('isCalculating')
     }
+
     function startLoading() {
         setIsCalculating(true)
         localStorage.setItem('isCalculating', 'true')
@@ -194,10 +172,11 @@ export default function Home() {
         pollingInterval: 2000,
         ready: isCalculating ,
     });
-    function handleClick() {
-        startLoading()
-    }
 
+    function handleClick() {
+        startLoading();
+        handleLogin();
+    }
 
     return (
         <Page className="grid grid-cols-12 lg:max-w-screen-xl">

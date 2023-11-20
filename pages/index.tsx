@@ -15,14 +15,13 @@ import {jwtDecode} from "jwt-decode";
 import {buildAdminCallResetOperatorUserOp} from "./userop/zkadmin";
 import {getAuth, signInWithCredential, signInWithRedirect, GoogleAuthProvider} from "@firebase/auth";
 import {app} from "./filebase"
-import { UserCredential } from "@firebase/auth";
-
+import {UserCredential} from "@firebase/auth";
+import {callFirebaseFunction} from "./api/filebase";
 
 interface Operational {
     privateKey: string
     address: string
 }
-
 
 const lsKey = "operation-key"
 const SEPOLIA = {
@@ -37,44 +36,46 @@ function getOperator(): Operational {
     return operator
 }
 
-function handleCredentialResponse(idToken: string) {
+async function handleCredentialResponse(idToken: string): string {
     // Build Firebase credential with the Google ID token.
     const credential = GoogleAuthProvider.credential(idToken);
 
     // Sign in with credential from the Google user.
     const auth = getAuth(app);
-    console.log("45,")
-    //console.log(auth)
-    console.log(credential)
 
-    signInWithCredential(auth, credential).then(( userCredential: UserCredential) => {
-        
-        console.log(userCredential.user.accessToken);
-
-    }).catch((error : any) => {
-
-        const errorCode = error.code;
-
-        const errorMessage = error.message;
-
+    try {
+        const res: UserCredential = await signInWithCredential(auth, credential)
+        return res.user.accessToken
+    } catch (err: any) {
+        const errorCode = err.code;
+        const errorMessage = err.message;
         // The email of the user's account used.
-        const email = error.email;
+        const email = err.email;
         // The credential that was used.
-        const credential = GoogleAuthProvider.credentialFromError(error);
-    });
+        const credential = GoogleAuthProvider.credentialFromError(err);
+    }
+    //     .then((userCredential: UserCredential) => {
+    //     const at = userCredential.user.accessToken
+    //     setAccessToken(at)
+    //
+    //
+    //     // TODO: move this block to the outside
+    //     // then use above data to initiate a firebase login
+
+    //         .then(res => {
+    //
+    //         })
+    //         .catch(err => {
+    //
+    //         })
+    //
+    // }).catch((error: any) => {
+    //
+    // });
 }
 
 function handleLogin(operator: Operational, setOperator: Function) {
     return async function () {
-
-        // arguments
-        // const accountAddress = "not implemented yet";
-        // const newOperatorAddress = operator.address;
-        //
-        // const userOp = await buildAdminCallResetOperatorUserOp(
-        //     SEPOLIA, accountAddress, newOperatorAddress,
-        // );
-        console.log("68")
 
         const queryIdToken = queryString.stringify({
             client_id: config.clientId,
@@ -87,8 +88,7 @@ function handleLogin(operator: Operational, setOperator: Function) {
             nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
             prompt: "consent",
         });
-        localStorage.clear()            
-        console.log("81")
+        localStorage.clear()
 
         setOperator(getOperator())
 
@@ -99,38 +99,65 @@ function handleLogin(operator: Operational, setOperator: Function) {
 export default function Home() {
     const {data, status} = useSession();
 
-    // state
+    // session state
     const [jwt, setJWT] = useState({});
     const [operator, setOperator] = useState({})
     const [loginResponse, setLoginResponse] = useState({})
 
+    // when page is loaded
     useEffect(() => {
+        // use this self-invoking function to embrace async-await
+        (async () => {
+            setOperator(getOperator)
 
-        setOperator(getOperator)
+            // means we have logged in
+            if (window.location.hash) {
+                const parsed = queryString.parse(location.hash) || "";
+                const idToken = parsed.id_token
+                const fbAccessToken = await handleCredentialResponse(idToken)
 
-        // means we have logged in
-        if (window.location.hash) {
-            const res = queryString.parse(location.hash) || "";
-            setLoginResponse(res)
-            console.log("118")
-            console.log(res)
-            handleCredentialResponse(res.id_token);
+                setLoginResponse(parsed)
 
-            if (res.access_token) {
-                axios
-                    .get("https://www.googleapis.com/oauth2/v2/userinfo", {
-                        params: {
-                            access_token: res.access_token,
-                        },
-                    })
-                    .then((res) => {
-                        setJWT(JSON.stringify(res.data, null, 4));
-                    });
-            } else if (res.id_token) {
-                const jwt = jwtDecode(res.id_token as string);
-                setJWT(jwt);
+                if (parsed.access_token) {
+                    axios
+                        .get("https://www.googleapis.com/oauth2/v2/userinfo", {
+                            params: {
+                                access_token: parsed.access_token,
+                            },
+                        })
+                        .then((res) => {
+                            setJWT(JSON.stringify(res.data, null, 4));
+                        });
+                } else if (parsed.id_token) {
+                    const jwt = jwtDecode(parsed.id_token as string);
+                    setJWT(jwt);
+                }
+
+                try {
+                    // arguments
+                    const accountAddress = "";
+                    const newOperatorAddress = operator.address;
+                    const userOp = await buildAdminCallResetOperatorUserOp(
+                        SEPOLIA, accountAddress, newOperatorAddress,
+                    );
+
+                    // const fbRes = await callFirebaseFunction(
+                    //     "requestToReset",
+                    //     {
+                    //         provider: "google",
+                    //         id_token: idToken,
+                    //         chain: SEPOLIA,
+                    //         dev: true,
+                    //         userOp,
+                    //     },
+                    //     fbAccessToken,
+                    // )
+                    // console.log(fbRes)
+                } catch (e) {
+                    throw e
+                }
             }
-        }
+        })()
     }, [])
 
     return (

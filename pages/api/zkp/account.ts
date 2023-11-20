@@ -58,7 +58,8 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
   const salt = ethers.keccak256(adminData);
   const accountAddr = await factory.predictClonedAddress(salt);
   if (await isContract(provider, accountAddr)) {
-    const account = OpenId3Account__factory.connect(accountAddr, provider);
+    const account = OpenId3Account__factory.connect(
+        accountAddr, provider);
     const [admin, operator] = await Promise.all([
       account.getAdmin(),
       account.getOperator(),

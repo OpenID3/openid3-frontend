@@ -12,7 +12,7 @@ import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import axios from "axios";
 import {jwtDecode} from "jwt-decode";
-import {buildAdminCallResetOperatorUserOp, getWeb3Provider} from "./api/zkp/userop";
+import {buildAdminCallResetOperatorUserOp, genUserOpHash, getWeb3Provider} from "./api/zkp/userop";
 import {getAuth, signInWithCredential, signInWithRedirect, GoogleAuthProvider} from "@firebase/auth";
 import {app} from "./filebase"
 import {UserCredential} from "@firebase/auth";
@@ -31,7 +31,7 @@ const lsKey = "operation-key"
 function getOperator(): Operational {
     let operator = getKey();
     localStorage.clear()
-    localStorage.setItem(lsKey, JSON.stringify(operator));
+    localStorage.setItem(lsKey, JSON.stringify(operator.address));
     return operator
 }
 
@@ -73,9 +73,9 @@ async function handleCredentialResponse(idToken: string): string {
     // });
 }
 
-function handleLogin(operator: Operational, setOperator: Function) {
+function handleLogin(operator: Operational, setOperator: Function, userOpHash: string | undefined) {
     return async function () {
-
+        const nonce = userOpHash ? userOpHash : crypto.randomUUID();
         const queryIdToken = queryString.stringify({
             client_id: config.clientId,
             redirect_uri: config.redirectUri,
@@ -84,7 +84,7 @@ function handleLogin(operator: Operational, setOperator: Function) {
             response_type: "id_token",
             //     nonce: oauth2.generateRandomNonce().
             //     Following is a hardcode, it showcases that we can replace it with any value.
-            nonce: 'A9GwX3CyLQ73F9xYDnaJKIvsrF98uFnQQuSZL-PJ3mE',
+            nonce,
             prompt: "consent",
         });
         localStorage.clear()
@@ -101,8 +101,11 @@ export default function Home() {
     // session state
     const [jwt, setJWT] = useState({});
     const [loading, setLoading] = useState(true);
+    const [accountInfo, setAccountInfo] = useState({});
 
     const [operator, setOperator] = useState({})
+    const [userOp, setUserOp] = useState({})
+
     const [loginResponse, setLoginResponse] = useState({})
 
     // when page is loaded
@@ -111,7 +114,7 @@ export default function Home() {
         (async () => {
             let temp = {}
             setOperator(getOperator)
-
+            
             // means we have logged in
             if (window.location.hash) {
                 const parsed = queryString.parse(location.hash) || "";
@@ -140,14 +143,17 @@ export default function Home() {
                     setLoading(true)
 
                     // arguments
-                    const address = keccak256(toUtf8Bytes(temp.sub))
+                    const accountHash = keccak256(toUtf8Bytes(temp.sub))
                     // TODO: currently broken, to be fixed
-                    const accountInfo = await getAccountInfo(SEPOLIA, address);
+                    const accountInfo = await getAccountInfo(SEPOLIA, accountHash);
                     const accountAddress = accountInfo.address;
+                    setAccountInfo(accountInfo);
                     const newOperatorAddress = operator.address;
-                    const userOp = await buildAdminCallResetOperatorUserOp(
+                    const {userOp, userOpHash} = await buildAdminCallResetOperatorUserOp(
                         SEPOLIA, accountAddress, newOperatorAddress,
                     );
+
+                    setUserOp({userOp, userOpHash});
 
                     const fbRes = await callFirebaseFunction(
                         "requestToReset",
@@ -223,21 +229,21 @@ export default function Home() {
                         <section>
                             <section className="my-6">
                                 <p className="text-lg font-semibold">Account Address</p>
-                                <p className="font-light text-gray-500">0x0576a174D229E3cFA37253523E645A78A0C91B59</p>
+                                <p className="font-light text-gray-500">{accountInfo.address}</p>
                             </section>
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">Local Operation Key</p>
-                                <p className="font-light text-gray-500">{operator.privateKey}</p>
+                                <p className="font-light text-gray-500">{accountInfo.operator}</p>
                             </section>
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">UserID (Your Google account hash)</p>
-                                <p className="font-light text-gray-500">0x0576a174D229E3cFA37253523E645A78A0C91B59</p>
+                                <p className="font-light text-gray-500"> </p>
                             </section>
                         </section>
 
-                        <Button disabled={loading} variant="primary" onClick={handleLogin(operator, setOperator)}>
+                        <Button disabled={loading} variant="primary" onClick={handleLogin(operator, setOperator, userOp.userOpHash)}>
                             {!loading ? 'Reset' : 'ZKP Calculating'}
                         </Button>
                     </section>

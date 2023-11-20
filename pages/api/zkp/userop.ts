@@ -1,5 +1,5 @@
 import { AddressLike, BigNumberish, BytesLike, ethers } from "ethers";
-import { GoogleZkAdmin, OpenId3Account, OpenId3Account__factory } from "@openid3/contracts";
+import { AccountFactory__factory, GoogleZkAdmin, OpenId3Account, OpenId3Account__factory } from "@openid3/contracts";
 import { DUMMY_SIGNATURE, ENTRY_POINT_ADDRESS } from "./constants";
 
 export type UserOperationStruct = {
@@ -40,32 +40,35 @@ export const buildAccountExecData = async (
 }
 
 const getNonce = async (
-    account: OpenId3Account,
+    accountAddr: string,
     chain: Chain,
 ) => {
-  const accountAddr = await account.getAddress();
   if (await getWeb3Provider(chain).getCode(accountAddr) === "0x") {
     return 0;
   }
+  const account = OpenId3Account__factory.connect(
+    accountAddr,
+    getWeb3Provider(chain)
+  );
   return await account.getNonce() as BigNumberish;
 }
 
 export const genUserOp = async (
   chain: Chain,
-  account: OpenId3Account,
+  sender: string,
+  initCode: string,
   callData: string,
   paymasterAndData: string,
 ): Promise<UserOperationStruct> => {
-  const accountAddr = await account.getAddress();
   const fee = await getWeb3Provider(chain).getFeeData();
   const signature = ethers.solidityPacked(
     ["uint8", "bytes"], [1, DUMMY_SIGNATURE]);
   const userOp: UserOperationStruct = {
-    sender: accountAddr,
-    nonce: await getNonce(account, chain),
-    initCode: "0x",
+    sender,
+    nonce: await getNonce(sender, chain),
+    initCode,
     callData,
-    callGasLimit: 200000, // hardcoded
+    callGasLimit: 1000000, // hardcoded
     verificationGasLimit: 2000000, // hardcoded
     preVerificationGas: 400000, // hardcoded, tune it later
     maxFeePerGas: fee.maxFeePerGas ?? 0n, // may need to tune this
@@ -127,30 +130,25 @@ export const buildZkAdminData = (
       ["address", "bytes"], [admin.target, adminData])
 }
 
-export async function buildAdminCallUserOp(
+export async function buildAdminCallResetOperatorUserOp(
     chain: Chain,
-    sender: OpenId3Account,
-    callData: string,
+    sender: string,
+    initCode: string,
+    newOperator: string,
     paymasterAndData?: string,
 ) {
-    let userOp = await genUserOp(
-        chain, sender, callData, paymasterAndData ?? "0x");
+    const iface = new ethers.Interface(OpenId3Account__factory.abi);
+    const callData = iface.encodeFunctionData(
+        "setOperator", [newOperator]);
+    const userOp = await genUserOp(
+          chain,
+          sender,
+          initCode,
+          callData,
+          paymasterAndData ?? "0x"
+    );
     const userOpHash = await genUserOpHash(chain, userOp);
     userOp.signature = ethers.solidityPacked(
         ["uint8", "bytes"], [1, userOp.signature]);
     return {userOp, userOpHash};
-}
-
-export async function buildAdminCallResetOperatorUserOp(
-    chain: Chain,
-    sender: string,
-    newOperator: string,
-    paymasterAndData?: string,
-) {
-    const account = OpenId3Account__factory.connect(
-        sender, getWeb3Provider(chain));
-    const callData = account.interface.encodeFunctionData(
-        "setOperator", [newOperator]);
-    return await buildAdminCallUserOp(
-        chain, account, callData, paymasterAndData ?? "0x");
 }

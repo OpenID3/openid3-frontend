@@ -62,6 +62,7 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
         admin: zkAdmin,
         operator: ethers.ZeroAddress,
         initCode: await getInitCode(chain, accountHash),
+        accountHash
     };
   } else {
     const account = OpenId3Account__factory.connect(
@@ -79,6 +80,7 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
         admin: zkAdmin,
         operator,
         initCode: "0x",
+        accountHash,
     };
   }
 }

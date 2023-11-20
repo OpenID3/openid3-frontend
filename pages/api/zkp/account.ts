@@ -69,7 +69,7 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
     return {
       address: accountAddr,
       deployed: true,
-      admin: zkAdmin,
+      admin: await zkAdmin.getAddress(),
       operator,
       initCode: "0x",
       accountHash,
@@ -78,7 +78,7 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
     return {
       address: accountAddr,
       deployed: false,
-      admin: zkAdmin,
+      admin: await zkAdmin.getAddress(),
       operator: ethers.ZeroAddress,
       initCode: await getInitCode(chain, accountHash),
       accountHash,

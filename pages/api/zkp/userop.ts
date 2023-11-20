@@ -1,6 +1,5 @@
 import { AddressLike, BigNumberish, BytesLike, ethers } from "ethers";
 import {
-  AccountFactory__factory,
   GoogleZkAdmin,
   OpenId3Account,
   OpenId3Account__factory,

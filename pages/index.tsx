@@ -11,17 +11,18 @@ import queryString from "query-string";
 import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import { jwtDecode } from "jwt-decode";
-import { UserOperationStruct, buildAdminCallResetOperatorUserOp } from "./api/zkp/userop";
+import { buildAdminCallResetOperatorUserOp } from "./api/zkp/userop";
 import { getAuth, signInWithCredential, GoogleAuthProvider } from "@firebase/auth";
 import { app } from "./filebase"
 import { UserCredential } from "@firebase/auth";
-import { callFirebaseFunction } from "./api/filebase";
+import { callFirebaseFunction } from "./filebase";
 import { getAccountInfo } from "./api/zkp/account";
 import { SEPOLIA } from "./api/zkp/constants";
-import { ethers, keccak256, toUtf8Bytes } from "ethers";
+import { keccak256, toUtf8Bytes } from "ethers";
 import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
 import * as web3 from 'web3';
+import { ZkpRequest, AuthState } from "./types";
 
 const lsKey = "operation-key"
 
@@ -47,130 +48,158 @@ async function handleCredentialResponse(idToken: string): Promise<string> {
 export default function Home() {
     const { data, status } = useSession();
 
-    // session state
-    const [jwt, setJWT] = useState<{sub: string}>({sub: ""});
-    const [isCalculating, setIsCalculating] = useState(false);
+    const [authState, setAuthState] =
+        useState<AuthState>({status: "unauthenticated"});
+    const [zkpRequest, setZkpRequest] =
+        useState<ZkpRequest>({status: "idle"});
 
-    const [accountInfo, setAccountInfo] = useState<{
-        address: string,
-        deployed: boolean,
-        initCode: string,
-        operator: string,
-        accountHash: string,
-    }>({
-        address: ethers.ZeroAddress,
-        deployed: false,
-        initCode: "0x",
-        accountHash: "0x",
-        operator: ethers.ZeroAddress,
+    // when page is loaded
+    useEffect(() => {
+        // use this self-invoking function to embrace async-await
+        (async () => {
+            if (authState.status == "authenticated" && zkpRequest.status === "requesting") {
+                const parsed = queryString.parse(location.hash) || "";
+                await callFirebaseFunction(
+                    "requestToReset",
+                    {
+                        provider: "google",
+                        idToken: parsed.id_token,
+                        chain: SEPOLIA,
+                        dev: true,
+                        userOp: zkpRequest.userOp,
+                    },
+                    authState.accessToken,
+                );
+                updateZkpRequest({
+                    ...zkpRequest,
+                    status: "requested",
+                });
+            } else if (authState.status === "authenticating") {
+                const parsed = queryString.parse(location.hash) || "";
+                const accessToken = await handleCredentialResponse(parsed.id_token as string);
+                const decoded = jwtDecode<{sub: string}>(parsed.id_token as string);
+                updateAuth({
+                    status: "authenticated",
+                    sub: decoded.sub,
+                    accessToken: accessToken,
+                    idToken: parsed.id_token as string,
+                });
+            }
+        })()
+    }, [authState.status, zkpRequest.status]);
+
+    useEffect(() => {
+        if (authState.status === "authenticated" && authState.sub) {
+            const key = authState.sub + "_zkp";
+            const zkpRequest = localStorage.getItem(key);
+            if (zkpRequest && zkpRequest.length > 0) {
+                setZkpRequest(JSON.parse(zkpRequest) as ZkpRequest)
+            }
+        }
+    }, [authState.status, authState.sub]);
+
+    useEffect(() => {
+        const auth = localStorage.getItem("auth");
+        if (auth && auth.length > 0) {
+            setAuthState(JSON.parse(auth) as AuthState)
+        }
+    }, []);
+
+    useEffect(() => {
+        (async () => {
+            if (authState.status === "authenticated" && authState.sub) {
+                const accountHash = keccak256(toUtf8Bytes(authState.sub!));
+                const accountInfo = await getAccountInfo(SEPOLIA, accountHash);
+                updateAuth({
+                    ...authState,
+                    account: accountInfo,
+                });
+            }
+        })()
+    }, [authState.status, authState.sub]);
+
+    function updateAuth(auth: AuthState) {
+        setAuthState(auth);
+        localStorage.setItem("auth", JSON.stringify(auth));
+    }
+
+    function updateZkpRequest(request: ZkpRequest) {
+        setZkpRequest(request);
+        const key = authState.sub + "_zkp";
+        localStorage.setItem(key, JSON.stringify(request));
+    }
+
+    function stopCalculating() {
+        updateZkpRequest({status: "idle"});
+    }
+
+    useRequest(queryZkpStatus, {
+        pollingInterval: 5000,
+        ready: zkpRequest.status === "requested",
     });
-    const [userOp, setUserOp] = useState<{
-        userOp?: UserOperationStruct,
-        userOpHash?: string
-    }>({})
-    const [operator, setOperator] = useState<web3.eth.accounts.Web3Account | null>(null);
-    const [_loginResponse, setLoginResponse] = useState({})
+
+    async function queryZkpStatus() {
+        if (zkpRequest.status !== "requested") {
+            return;
+        }
+
+        try {
+            const res = await callFirebaseFunction(
+                "queryResetStatus",
+                {chain: SEPOLIA},
+                authState.accessToken!,
+            );
+            if (res.data.status !== "processing") {
+                stopCalculating();
+            }
+        } catch(err: any) {
+            if (err.response.status === 404) {
+                stopCalculating();
+            } else {
+                throw err;
+            }
+        }
+    }
 
     async function handleLogin() {
-        setOperator(getOperator());
+        await getGoogleIdToken(crypto.randomUUID());
+        updateAuth({status: "authenticating"});
+    }
+
+    async function handleReset() {
+        const operator = getOperator();
+        const newOperatorAddress = operator!.address;
+        const userOp = await buildAdminCallResetOperatorUserOp(
+            SEPOLIA,
+            authState.account!.address,
+            authState.account!.initCode,
+            newOperatorAddress,
+        );
+        updateZkpRequest({
+            status: "requesting",
+            userOp: userOp.userOp,
+            userOpHash: userOp.userOpHash,
+            operator,
+        });
+        await getGoogleIdToken(userOp.userOpHash!.slice(2));
+    }
+
+    async function handleLogout() {
+        updateAuth({status: "unauthenticated"});
+    }
+
+    async function getGoogleIdToken(nonce: string) {
         const queryIdToken = queryString.stringify({
             client_id: config.clientId,
             redirect_uri: config.redirectUri,
             scope: config.scopes,
             state: oauth2.generateRandomState(),
             response_type: "id_token",
-            nonce: userOp.userOpHash!.slice(2),
+            nonce,
             prompt: "consent",
         });
-        localStorage.removeItem(lsKey)
+        localStorage.removeItem(lsKey);
         window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${queryIdToken}`;
-    }
-
-    // when page is loaded
-    useEffect(() => {
-        // use this self-invoking function to embrace async-await
-        (async () => {
-            setOperator(getOperator)
-            if (window.location.hash) {
-                const parsed = queryString.parse(location.hash) || "";
-                const fbAccessToken = await handleCredentialResponse(parsed.id_token as string)
-                setLoginResponse(parsed)
-                setJWT(jwtDecode(parsed.id_token as string));
-                try {
-                    const address = keccak256(toUtf8Bytes(jwt.sub))
-                    const accountInfo = await getAccountInfo(SEPOLIA, address);
-                    setAccountInfo(accountInfo);
-                    const newOperatorAddress = operator!.address;
-                    const userOp = await buildAdminCallResetOperatorUserOp(
-                        SEPOLIA,
-                        accountInfo.address,
-                        accountInfo.initCode,
-                        newOperatorAddress,
-                    );
-                    setUserOp(userOp);
-                    const fbRes = await callFirebaseFunction(
-                        "requestToReset",
-                        {
-                            provider: "google",
-                            id_token: parsed.id_token,
-                            chain: SEPOLIA,
-                            dev: true,
-                            userOp,
-                        },
-                        fbAccessToken,
-                    )
-                    setIsCalculating(true)
-                    localStorage.setItem('isCalculate', 'true')
-                    console.log(1234567, fbRes)
-                } catch (e) {
-                    throw e
-                } finally {
-                    setIsCalculating(false)
-                    localStorage.setItem('isCalculate', 'false')
-                }
-            }
-        })()
-    }, [jwt.sub, operator])
-
-    useEffect(() => {
-        const _isCalculating = localStorage.getItem('isCalculating')
-        if (_isCalculating === 'true') {
-            setIsCalculating(true)
-        }
-    }, []);
-
-    async function callFunction2() {
-        console.log('calling')
-        // mock call
-        if (Date.now() > 1700594759838) {
-            // if success cancel polling
-            setIsCalculating(false)
-            localStorage.removeItem('isCalculating')
-        } else {
-            console.log("polling")
-            throw new Error('polling')
-            // call function2
-        }
-    }
-
-    function stopLoading() {
-        setIsCalculating(false)
-        localStorage.removeItem('isCalculating')
-    }
-
-    function startLoading() {
-        setIsCalculating(true)
-        localStorage.setItem('isCalculating', 'true')
-    }
-    
-    useRequest(callFunction2, {
-        pollingInterval: 2000,
-        ready: isCalculating ,
-    });
-
-    function handleClick() {
-        startLoading();
-        handleLogin();
     }
 
     return (
@@ -181,9 +210,27 @@ export default function Home() {
                         <Image src={iconMain} alt="home icon" />
                         <p className="text-xl font-semibold"> Openid3 </p>
                     </section>
-                    <button className="font-semibold text-gray-400">
-                        Sign Out
-                    </button>
+                    {
+                        authState.status === "unauthenticated" && (
+                            <Button variant="secondary" onClick={handleLogin}>
+                                Sign In
+                            </Button>
+                        )
+                    }
+                    {
+                        authState.status === "authenticating" && (
+                            <Button disabled variant="secondary">
+                                Signing In
+                            </Button>
+                        )
+                    }
+                    {
+                        authState.status === "authenticated" && (
+                            <Button variant="secondary" onClick={handleLogout}>
+                                Sign Out
+                            </Button>
+                        )
+                    }
                 </section>
 
                 <section className="my-20">
@@ -228,27 +275,44 @@ export default function Home() {
                         <section>
                             <section className="my-6">
                                 <p className="text-lg font-semibold">Account Address</p>
-                                <p className="font-light text-gray-500">{accountInfo.address}</p>
+                                <p className="font-light text-gray-500">{authState.account?.address ?? (
+                                    authState.status == "unauthenticated" ? "please login first" : "loading account info"
+                                )}</p>
                             </section>
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">Local Operation Key</p>
-                                <p className="font-light text-gray-500">{accountInfo.operator}</p>
+                                <p className="font-light text-gray-500">{authState.account?.operator ?? (
+                                    authState.status == "unauthenticated" ? "please login first" : "loading account info"
+                                )}</p>
                             </section>
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">UserID (Your Google account hash)</p>
-                                <p className="font-light text-gray-500">{accountInfo.accountHash}</p>
+                                <p className="font-light text-gray-500">{authState.account?.accountHash ?? (
+                                    authState.status == "unauthenticated" ? "please login first" : "loading account info"
+                                )}</p>
                             </section>
                         </section>
-
-                        <Button disabled={isCalculating} variant="primary" onClick={handleClick}>
-                            {!isCalculating ? <span>Reset</span> : <div className="flex justify-center items-center">ZKP Calculating &nbsp;<BounceLoader size={12} color="#fff" /></div>}
-                        </Button>
                         {
-                            isCalculating &&  <Button  className="" variant="secondary" onClick={stopLoading}>
-                                Stop
-                        </Button>
+                            zkpRequest.status !== 'requested'  && <Button
+                                disabled={authState.status !== "authenticated" || zkpRequest.status !== "idle"}
+                                variant="primary"
+                                onClick={handleReset}
+                            >
+                                <span>Reset</span>
+                            </Button>
+                        }
+                        {
+                            zkpRequest.status === 'requested' &&
+                                <Button
+                                    variant="primary"
+                                    onClick={handleReset}
+                                >
+                                    <div className="flex justify-center items-center">
+                                        Calculating Zkp &nbsp;<BounceLoader size={12} color="#fff" />
+                                    </div>
+                                </Button>
                         }
                     </section>
                 </section>

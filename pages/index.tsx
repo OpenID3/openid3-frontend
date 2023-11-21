@@ -18,7 +18,7 @@ import { UserCredential } from "@firebase/auth";
 import { callFirebaseFunction } from "./filebase";
 import { getAccountInfo } from "./api/zkp/account";
 import { SEPOLIA } from "./api/zkp/constants";
-import { ethers, keccak256, toUtf8Bytes } from "ethers";
+import { ethers, keccak256, sha256, toUtf8Bytes } from "ethers";
 import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
 import * as web3 from 'web3';
@@ -127,7 +127,7 @@ export default function Home() {
     useEffect(() => {
         (async () => {
             if (authState.status === "authenticated" && authState.sub) {
-                const accountHash = keccak256(toUtf8Bytes(authState.sub!));
+                const accountHash = sha256(ethers.toUtf8Bytes(authState.sub));
                 const accountInfo = await getAccountInfo(SEPOLIA, accountHash);
                 const provider = getWeb3Provider(SEPOLIA);
                 const balance = await provider.getBalance(accountInfo.address);

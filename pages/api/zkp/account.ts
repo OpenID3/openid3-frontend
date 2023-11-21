@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { Chain, buildZkAdminData, getWeb3Provider } from "./userop";
+import { Chain, buildZkAdminData, getWeb3Provider, isContract } from "./userop";
 import {
   AccountFactory,
   AccountFactory__factory,
@@ -18,21 +18,10 @@ export function getAccountFactory(chain: Chain): AccountFactory {
 
 export function getGoogleZkAdmin(provider: ethers.Provider): GoogleZkAdmin {
   return GoogleZkAdmin__factory.connect(
-    "0xbeE0224b98e01A3Dc2066b81bcf2Ce8D5FCF6E15", // TODO: same as above, revert this
+    "0x74EE758Fa8ebE4E54fD94a88B0C03E0D21D7ffCB", // TODO: same as above, revert this
     // process.env.GOOGLE_ZK_ADMIN_CONTRACT_V1!,
     provider
   );
-}
-
-export async function isContract(
-  provider: ethers.Provider,
-  address: string
-): Promise<boolean> {
-  try {
-    const code = await provider.getCode(address);
-    if (code !== "0x") return true;
-  } catch (error) {}
-  return false;
 }
 
 async function getInitCode(chain: Chain, accountHash: string) {
@@ -64,7 +53,7 @@ export async function getAccountInfo(chain: Chain, accountHash: string) {
       account.getAdmin(),
       account.getOperator(),
     ]);
-    if (admin != "0xbeE0224b98e01A3Dc2066b81bcf2Ce8D5FCF6E15") {
+    if (admin != "0x74EE758Fa8ebE4E54fD94a88B0C03E0D21D7ffCB") {
       throw new Error("account is not controlled by the admin anymore");
     }
     return {

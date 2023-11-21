@@ -25,6 +25,17 @@ export interface Chain {
   id: number;
 }
 
+export async function isContract(
+  provider: ethers.Provider,
+  address: string
+): Promise<boolean> {
+  try {
+    const code = await provider.getCode(address);
+    if (code !== "0x") return true;
+  } catch (error) {}
+  return false;
+}
+
 export const getWeb3Provider = (chain: Chain) => {
   const apiKey = process.env.NEXT_PUBLIC_INFURA_API_KEY;
   return new ethers.InfuraProvider(Number(chain.id), apiKey);
@@ -60,11 +71,15 @@ export const genUserOp = async (
   callData: string,
   paymasterAndData: string
 ): Promise<UserOperationStruct> => {
-  const fee = await getWeb3Provider(chain).getFeeData();
+  const provider = getWeb3Provider(chain);
+  if (await isContract(provider, sender)) {
+    initCode = "0x";
+  }
   const signature = ethers.solidityPacked(
     ["uint8", "bytes"],
     [1, DUMMY_SIGNATURE]
   );
+  const fee = await provider.getFeeData();
   const maxFeePerGas = fee.maxFeePerGas ?? 0n;
   const maxPriorityFeePerGas = fee.maxPriorityFeePerGas ?? 0n;
   const nonce = await getNonce(sender, chain);

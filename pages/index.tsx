@@ -23,6 +23,7 @@ import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
 import * as web3 from 'web3';
 import { ZkpRequest, AuthState } from "./types";
+import { useLocation } from "react-router-dom";
 
 const lsKey = "operation-key"
 
@@ -53,17 +54,33 @@ export default function Home() {
     const [zkpRequest, setZkpRequest] =
         useState<ZkpRequest>({status: "idle"});
 
+    const [idToken, setIdToken] = useState<string | null>(null);
+
+    useEffect(() => {
+        const parsed = queryString.parse(location.hash) || {};
+        if (parsed.id_token) {
+            setIdToken(parsed.id_token as string);
+        }
+    }, [])
+
     // when page is loaded
     useEffect(() => {
         // use this self-invoking function to embrace async-await
         (async () => {
+            if (!idToken) {
+                return;
+            }
             if (authState.status == "authenticated" && zkpRequest.status === "requesting") {
-                const parsed = queryString.parse(location.hash) || "";
+                // this means it's called before the redirect
+                if (idToken === authState.idToken) {
+                    return;
+                }
+                const decoded = jwtDecode<{sub: string}>(idToken);
                 await callFirebaseFunction(
                     "requestToReset",
                     {
                         provider: "google",
-                        idToken: parsed.id_token,
+                        idToken,
                         chain: SEPOLIA,
                         dev: true,
                         userOp: zkpRequest.userOp,
@@ -72,21 +89,21 @@ export default function Home() {
                 );
                 updateZkpRequest({
                     ...zkpRequest,
+                    idToken,
                     status: "requested",
                 });
             } else if (authState.status === "authenticating") {
-                const parsed = queryString.parse(location.hash) || "";
-                const accessToken = await handleCredentialResponse(parsed.id_token as string);
-                const decoded = jwtDecode<{sub: string}>(parsed.id_token as string);
+                const accessToken = await handleCredentialResponse(idToken as string);
+                const decoded = jwtDecode<{sub: string}>(idToken as string);
                 updateAuth({
                     status: "authenticated",
                     sub: decoded.sub,
                     accessToken: accessToken,
-                    idToken: parsed.id_token as string,
+                    idToken,
                 });
             }
         })()
-    }, [authState.status, zkpRequest.status]);
+    }, [authState.status, zkpRequest.status, idToken]);
 
     useEffect(() => {
         if (authState.status === "authenticated" && authState.sub) {
@@ -142,7 +159,6 @@ export default function Home() {
         if (zkpRequest.status !== "requested") {
             return;
         }
-
         try {
             const res = await callFirebaseFunction(
                 "queryResetStatus",
@@ -162,8 +178,8 @@ export default function Home() {
     }
 
     async function handleLogin() {
-        await getGoogleIdToken(crypto.randomUUID());
         updateAuth({status: "authenticating"});
+        await getGoogleIdToken(crypto.randomUUID());
     }
 
     async function handleReset() {

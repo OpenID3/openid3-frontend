@@ -11,14 +11,14 @@ import queryString from "query-string";
 import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import { jwtDecode } from "jwt-decode";
-import { buildAdminCallResetOperatorUserOp } from "./api/zkp/userop";
+import { buildAdminCallResetOperatorUserOp, getWeb3Provider } from "./api/zkp/userop";
 import { getAuth, signInWithCredential, GoogleAuthProvider } from "@firebase/auth";
 import { app } from "./filebase"
 import { UserCredential } from "@firebase/auth";
 import { callFirebaseFunction } from "./filebase";
 import { getAccountInfo } from "./api/zkp/account";
 import { SEPOLIA } from "./api/zkp/constants";
-import { keccak256, toUtf8Bytes } from "ethers";
+import { ethers, keccak256, toUtf8Bytes } from "ethers";
 import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
 import * as web3 from 'web3';
@@ -54,6 +54,7 @@ export default function Home() {
         useState<ZkpRequest>({status: "idle"});
 
     const [idToken, setIdToken] = useState<string | null>(null);
+    const [balance, setBalance] = useState<string | null>(null);
 
     useEffect(() => {
         const parsed = queryString.parse(location.hash) || {};
@@ -126,6 +127,9 @@ export default function Home() {
             if (authState.status === "authenticated" && authState.sub) {
                 const accountHash = keccak256(toUtf8Bytes(authState.sub!));
                 const accountInfo = await getAccountInfo(SEPOLIA, accountHash);
+                const provider = getWeb3Provider(SEPOLIA);
+                const balance = await provider.getBalance(accountInfo.address);
+                setBalance(ethers.formatEther(balance));
                 updateAuth({
                     ...authState,
                     account: accountInfo,
@@ -267,8 +271,7 @@ export default function Home() {
                             <p> ETH </p>
                         </section>
                         <section className="flex flex-col items-end">
-                            <p className="font-semibold">$0</p>
-                            <p className="text-gray-500">ETH 0</p>
+                            <p className="text-gray-500">{balance} ETH</p>
                         </section>
                     </section>
 
@@ -278,8 +281,7 @@ export default function Home() {
                             <p> USDC </p>
                         </section>
                         <section className="flex flex-col items-end">
-                            <p className="font-semibold">$0</p>
-                            <p className="text-gray-500">USDC 0</p>
+                            <p className="text-gray-500">0 USDC</p>
                         </section>
                     </section>
                 </section>

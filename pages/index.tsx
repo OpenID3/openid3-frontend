@@ -74,7 +74,7 @@ export default function Home() {
                 if (idToken === authState.idToken) {
                     return;
                 }
-                const decoded = jwtDecode<{sub: string}>(idToken);
+                console.log("idToken to proof: ", idToken);
                 await callFirebaseFunction(
                     "requestToReset",
                     {
@@ -147,6 +147,7 @@ export default function Home() {
 
     function stopCalculating() {
         updateZkpRequest({status: "idle"});
+        window.location.href = "/";
     }
 
     useRequest(queryZkpStatus, {
@@ -201,6 +202,7 @@ export default function Home() {
 
     async function handleLogout() {
         updateAuth({status: "unauthenticated"});
+        window.location.href = "/";
     }
 
     async function getGoogleIdToken(nonce: string) {

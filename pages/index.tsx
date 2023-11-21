@@ -110,7 +110,9 @@ export default function Home() {
             const key = authState.sub + "_zkp";
             const zkpRequest = localStorage.getItem(key);
             if (zkpRequest && zkpRequest.length > 0) {
-                setZkpRequest(JSON.parse(zkpRequest) as ZkpRequest)
+                const request = JSON.parse(zkpRequest) as ZkpRequest;
+                console.log("idToken to proof: ", request.idToken);
+                setZkpRequest(request);
             }
         }
     }, [authState.status, authState.sub]);
@@ -187,6 +189,10 @@ export default function Home() {
     }
 
     async function handleReset() {
+        if (zkpRequest.status !== "idle") {
+            console.log("zkp in progress");
+            return;
+        }
         const operator = getOperator();
         const newOperatorAddress = operator!.address;
         const userOp = await buildAdminCallResetOperatorUserOp(
@@ -314,8 +320,8 @@ export default function Home() {
                             </section>
                         </section>
                         {
-                            zkpRequest.status !== 'requested'  && <Button
-                                disabled={authState.status !== "authenticated" || zkpRequest.status !== "idle"}
+                            zkpRequest.status === "idle" && <Button
+                                disabled={authState.status !== "authenticated"}
                                 variant="primary"
                                 onClick={handleReset}
                             >
@@ -323,10 +329,10 @@ export default function Home() {
                             </Button>
                         }
                         {
-                            zkpRequest.status === 'requested' &&
+                            zkpRequest.status !== 'idle' &&
                                 <Button
+                                    disabled
                                     variant="primary"
-                                    onClick={handleReset}
                                 >
                                     <div className="flex justify-center items-center">
                                         Calculating Zkp &nbsp;<BounceLoader size={12} color="#fff" />

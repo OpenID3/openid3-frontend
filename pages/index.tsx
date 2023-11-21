@@ -23,7 +23,6 @@ import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
 import * as web3 from 'web3';
 import { ZkpRequest, AuthState } from "./types";
-import { useLocation } from "react-router-dom";
 
 const lsKey = "operation-key"
 

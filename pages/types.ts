@@ -6,6 +6,7 @@ export interface AccountInfo {
     initCode: string,
     operator: string,
     accountHash: string,
+    balance: string,
 }
 
 export interface AuthState {
@@ -13,7 +14,6 @@ export interface AuthState {
     sub?: string;
     accessToken?: string;
     idToken?: string;
-    account?: AccountInfo;
 }
 
 export interface ZkpRequest {

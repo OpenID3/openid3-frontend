@@ -11,18 +11,18 @@ import queryString from "query-string";
 import * as oauth2 from "oauth4webapi";
 import config from "./config";
 import { jwtDecode } from "jwt-decode";
-import { buildAdminCallResetOperatorUserOp, getWeb3Provider } from "./api/zkp/userop";
+import { buildAdminCallResetOperatorUserOp } from "./api/zkp/userop";
 import { getAuth, signInWithCredential, GoogleAuthProvider } from "@firebase/auth";
 import { app } from "./filebase"
 import { UserCredential } from "@firebase/auth";
 import { callFirebaseFunction } from "./filebase";
 import { getAccountInfo } from "./api/zkp/account";
 import { SEPOLIA } from "./api/zkp/constants";
-import { ethers, keccak256, sha256, toUtf8Bytes } from "ethers";
+import { ethers, sha256 } from "ethers";
 import { useRequest } from 'ahooks'
 import { BounceLoader } from 'react-spinners'
 import * as web3 from 'web3';
-import { ZkpRequest, AuthState } from "./types";
+import { ZkpRequest, AuthState, AccountInfo } from "./types";
 
 const lsKey = "operation-key"
 
@@ -53,6 +53,7 @@ export default function Home() {
     const [zkpRequest, setZkpRequest] =
         useState<ZkpRequest>({status: "idle"});
 
+    const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
     const [idToken, setIdToken] = useState<string | null>(null);
     const [balance, setBalance] = useState<string | null>(null);
 
@@ -129,13 +130,7 @@ export default function Home() {
             if (authState.status === "authenticated" && authState.sub) {
                 const accountHash = sha256(ethers.toUtf8Bytes(authState.sub));
                 const accountInfo = await getAccountInfo(SEPOLIA, accountHash);
-                const provider = getWeb3Provider(SEPOLIA);
-                const balance = await provider.getBalance(accountInfo.address);
-                setBalance(ethers.formatEther(balance));
-                updateAuth({
-                    ...authState,
-                    account: accountInfo,
-                });
+                setAccountInfo(accountInfo);
             }
         })()
     }, [authState.status, authState.sub]);
@@ -197,8 +192,8 @@ export default function Home() {
         const newOperatorAddress = operator!.address;
         const userOp = await buildAdminCallResetOperatorUserOp(
             SEPOLIA,
-            authState.account!.address,
-            authState.account!.initCode,
+            accountInfo!.address,
+            accountInfo!.initCode,
             newOperatorAddress,
         );
         updateZkpRequest({
@@ -300,21 +295,21 @@ export default function Home() {
                         <section>
                             <section className="my-6">
                                 <p className="text-lg font-semibold">Account Address</p>
-                                <p className="font-light text-gray-500">{authState.account?.address ?? (
+                                <p className="font-light text-gray-500">{accountInfo?.address ?? (
                                     authState.status == "unauthenticated" ? "please login first" : "loading account info"
                                 )}</p>
                             </section>
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">Local Operation Key</p>
-                                <p className="font-light text-gray-500">{authState.account?.operator ?? (
+                                <p className="font-light text-gray-500">{accountInfo?.operator ?? (
                                     authState.status == "unauthenticated" ? "please login first" : "loading account info"
                                 )}</p>
                             </section>
 
                             <section className="my-10">
                                 <p className="text-lg font-semibold">UserID (Your Google account hash)</p>
-                                <p className="font-light text-gray-500">{authState.account?.accountHash ?? (
+                                <p className="font-light text-gray-500">{accountInfo?.accountHash ?? (
                                     authState.status == "unauthenticated" ? "please login first" : "loading account info"
                                 )}</p>
                             </section>
